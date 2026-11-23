@@ -338,9 +338,17 @@ class CircleService : AccessibilityService() {
         if (packageManager.queryIntentActivities(i, 0).isEmpty()) return false
         return try {
             val dm = resources.displayMetrics
-            val bounds = Rect((dm.widthPixels * 0.40f).toInt(), (dm.heightPixels * 0.10f).toInt(), dm.widthPixels - T.dp(14), (dm.heightPixels * 0.90f).toInt())
+            // Small floating window on the right: about 42% wide, 66% tall.
+            val bounds = Rect((dm.widthPixels * 0.55f).toInt(), (dm.heightPixels * 0.14f).toInt(), dm.widthPixels - T.dp(12), (dm.heightPixels * 0.80f).toInt())
             val o = ActivityOptions.makeBasic()
-            if (Store.b("circle_float", true)) o.setLaunchBounds(bounds)
+            if (Store.b("circle_float", true)) {
+                o.setLaunchBounds(bounds)
+                try {
+                    // 5 = freeform windowing mode; forces a floating window where the system allows it.
+                    ActivityOptions::class.java.getMethod("setLaunchWindowingMode", Int::class.javaPrimitiveType).invoke(o, 5)
+                } catch (e: Throwable) {
+                }
+            }
             startActivity(i, o.toBundle())
             toast("Sent to Gemini  -  prompt copied if it needs pasting")
             autoSend(0)
