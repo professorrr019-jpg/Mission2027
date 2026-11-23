@@ -816,8 +816,13 @@ class SettingsActivity : Activity() {
                 "Scene",
                 "wp_scene",
                 "sangam",
-                listOf("sangam" to "Prayagraj Sangam (4K, live)", "hills" to "Misty hills", "dunes" to "Soft dunes", "forest" to "Pine forest", "ocean" to "Ocean horizon", "waves" to "Calm waves", "gradient" to "Aurora gradient", "paper" to "Warm paper", "amoled" to "Pure dark (OLED)", "photo" to "My photos"),
+                listOf("online" to "Real photos (online, free)", "sangam" to "Prayagraj Sangam (4K, live)", "hills" to "Misty hills", "dunes" to "Soft dunes", "forest" to "Pine forest", "ocean" to "Ocean horizon", "waves" to "Calm waves", "gradient" to "Aurora gradient", "paper" to "Warm paper", "amoled" to "Pure dark (OLED)", "photo" to "My photos"),
             ) {
+            },
+            choice("Photo source", "online_src", "wiki", listOf("wiki" to "Wikimedia Commons: Prayagraj photos", "bing" to "Bing photo of the day (India)", "apod" to "NASA astronomy picture of the day")),
+            action("refresh", T.teal, "Download photos now", if (Online.credit().isBlank()) "Needs internet. ${Online.files(this@SettingsActivity).size} saved" else Online.credit()) {
+                toast("Downloading...")
+                Online.refreshAsync(this@SettingsActivity, true) { n -> runOnUiThread { toast(if (n > 0) "$n photos ready, choose Apply now" else "No photo could be downloaded") ; redraw() } }
             },
             choice("Apply to", "wp_target", "both", listOf("both" to "Home and lock", "home" to "Home only", "lock" to "Lock only")),
         )
@@ -931,12 +936,12 @@ class SettingsActivity : Activity() {
             num(
                 "Drawer icon size",
                 "drawer_icon",
-                44,
-                24,
+                30,
+                20,
                 88,
                 "dp",
             ),
-            num("Pinned app icon size", "dock_icon", 52, 24, 72, "dp"), sw("Drawer app names", null, "drawer_labels", true),
+            num("Pinned app icon size", "dock_icon", 30, 20, 72, "dp"), sw("Drawer app names", null, "drawer_labels", true),
             slider("Text size", "text_scale", 100, 130, min = 80) {
                 T.init(c.applicationContext)
                 recreate()

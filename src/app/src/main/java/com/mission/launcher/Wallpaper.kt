@@ -28,6 +28,7 @@ class WOpts(val grain: Boolean = true, val comfort: Boolean = true, val season: 
 object Scenes {
     val names =
         linkedMapOf(
+            "online" to "Real photos (online)",
             "sangam" to "Prayagraj Sangam (4K)",
             "hills" to "Layered hills",
             "dunes" to "Soft dunes",
@@ -199,6 +200,46 @@ object Scenes {
                 cv.drawRect(0f, 0f, w.toFloat(), h.toFloat(), p)
                 p.shader = null
                 glow(cv, p, w * 0.72f, h * 0.28f, h * 0.7f, lc(hz, Color.WHITE, 0.4f), 0.30f)
+            }
+            "online" -> {
+                val oc = Backdrop.ctx
+                val ph = if (oc != null) Online.decode(oc, w, h) else null
+                if (oc != null) Online.refreshAsync(oc)
+                if (ph == null) {
+                    val hy = Backdrop.draw(cv, w, h, ref, false)
+                    if (hy < 0f) {
+                        p.shader = LinearGradient(0f, 0f, 0f, h.toFloat(), comfort(top, hour, o.comfort), comfort(hz, hour, o.comfort), Shader.TileMode.CLAMP)
+                        cv.drawRect(0f, 0f, w.toFloat(), h.toFloat(), p)
+                        p.shader = null
+                    }
+                } else {
+                    val sc = max(w.toFloat() / ph.width, h.toFloat() / ph.height)
+                    val m = Matrix()
+                    m.postScale(sc, sc)
+                    m.postTranslate((w - ph.width * sc) / 2f, (h - ph.height * sc) / 2f)
+                    val pp = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+                    // grade the real photo by the real light: darker and bluer at night, warm near sunrise and sunset
+                    val k = 0.22f + 0.78f * L
+                    val cm = ColorMatrix(floatArrayOf(k * 0.92f, 0f, 0f, 0f, 0f, 0f, k * 0.97f, 0f, 0f, 0f, 0f, 0f, k * (1f + (1f - L) * 0.25f).coerceAtMost(1.15f), 0f, 4f * (1f - L), 0f, 0f, 0f, 1f, 0f))
+                    pp.colorFilter = ColorMatrixColorFilter(cm)
+                    cv.drawBitmap(ph, m, pp)
+                    val warm = (1f - kotlin.math.abs(L - 0.45f) * 2.2f).coerceIn(0f, 1f) * (if (L in 0.08f..0.8f) 1f else 0f)
+                    if (warm > 0.02f) {
+                        p.color = lc(hz, Color.WHITE, 0.2f)
+                        p.alpha = (warm * 70).toInt()
+                        cv.drawRect(0f, 0f, w.toFloat(), h.toFloat(), p)
+                        p.alpha = 255
+                    }
+                    if (L < 0.35f) {
+                        val layer = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+                        val lc2 = Canvas(layer)
+                        lc2.clipRect(0f, 0f, w.toFloat(), h * 0.55f)
+                        celestial(lc2, p, w, h, h * 0.55f, hour, L, hz, lunarPhase(date), date, weather)
+                        cv.drawBitmap(layer, 0f, 0f, null)
+                        layer.recycle()
+                    }
+                    ph.recycle()
+                }
             }
             "sangam" -> {
                 val fog = weather?.let { Weather.mapWeatherCode(it.code, it.visibilityM) in listOf(Weather.Scene.FOG, Weather.Scene.HAZE, Weather.Scene.OVERCAST, Weather.Scene.DRIZZLE) } ?: false

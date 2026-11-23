@@ -392,7 +392,7 @@ class MainActivity : Activity(), Host {
 
     // ---------- layout ----------
     private fun applyInsets() {
-        val dockH = if (dock.height > 0) dock.height else T.dp(Store.i("dock_icon", 52).coerceIn(24, 72) + 34)
+        val dockH = if (dock.height > 0) dock.height else T.dp(Store.i("dock_icon", 30).coerceIn(20, 72) + 34)
         (dots.layoutParams as FrameLayout.LayoutParams).bottomMargin = botInset + T.dp(14) + dockH + T.dp(8)
         (dock.layoutParams as FrameLayout.LayoutParams).bottomMargin = botInset + T.dp(14)
         dock.post {
@@ -441,7 +441,7 @@ class MainActivity : Activity(), Host {
         attachGestures(sv)
         val col = vbox()
         val wide = resources.displayMetrics.widthPixels / resources.displayMetrics.density > 700
-        col.setPadding(T.dp(if (wide) 24 else 14), T.dp(8), T.dp(if (wide) 24 else 14), T.dp(maxOf(150, Store.i("dock_icon", 52).coerceIn(24, 72) + 34 + 14 + 48)) + botInset)
+        col.setPadding(T.dp(if (wide) 24 else 14), T.dp(8), T.dp(if (wide) 24 else 14), T.dp(maxOf(150, Store.i("dock_icon", 30).coerceIn(20, 72) + 34 + 14 + 48)) + botInset)
         val ids = if (Store.b("safe_mode", false)) emptyList() else HomeLayout.cards(p)
         if (editing) {
             col.addView(text(p.optString("name") + "  (page ${i + 1}/${layout.length()})", 13f, 3, T.text2).apply { padDp(6, 6, 6, 6) })
@@ -967,7 +967,7 @@ class MainActivity : Activity(), Host {
     private fun buildDock() {
         dock.removeAllViews()
         val pins = Apps.pins().mapNotNull { Apps.byPkg(it) }.take(5)
-        val pinSize = T.dp(Store.i("dock_icon", 52).coerceIn(24, 72))
+        val pinSize = T.dp(Store.i("dock_icon", 30).coerceIn(20, 72))
         pins.forEach { e ->
             dock.addView(
                 ImageView(this).apply {

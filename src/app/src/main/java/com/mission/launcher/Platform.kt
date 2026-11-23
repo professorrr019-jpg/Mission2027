@@ -224,6 +224,8 @@ object Overlay {
         }
     }
 
+    private val timers = HashMap<String, Runnable>()
+
     fun show(
         c: Context,
         tag: String,
@@ -246,7 +248,12 @@ object Overlay {
                 val wm = c.getSystemService(Context.WINDOW_SERVICE) as WindowManager
                 wm.addView(v, lp)
                 views[tag] = v
-                if (autoRemoveMs > 0) main.postDelayed({ if (views[tag] === v) remove(c, tag) }, autoRemoveMs)
+                timers.remove(tag)?.let { main.removeCallbacks(it) }
+                if (autoRemoveMs > 0) {
+                    val r = Runnable { if (views[tag] === v) remove(c, tag) }
+                    timers[tag] = r
+                    main.postDelayed(r, autoRemoveMs)
+                }
             } catch (e: Exception) {
                 Log.e("overlay", e)
             }
@@ -271,6 +278,7 @@ object Overlay {
     ) {
         main.post {
             try {
+                timers.remove(tag)?.let { main.removeCallbacks(it) }
                 val v = views.remove(tag) ?: return@post
                 (c.getSystemService(Context.WINDOW_SERVICE) as WindowManager).removeViewImmediate(v)
             } catch (
@@ -304,6 +312,11 @@ class TickReceiver : BroadcastReceiver() {
                 Targets.schedule(c)
                 Auto.fire(c)
                 Updater.backgroundCheck(c)
+                try {
+                    if (Zite.hasKey() && Zite.stale() && c.online()) Zite.sync(c)
+                } catch (e: Exception) {
+                    Log.e("tick-sync", e)
+                }
                 try {
                     val cutoff = System.currentTimeMillis() - 24 * 60 * 60 * 1000L
                     c.cacheDir.listFiles()?.filter { it.isFile && it.lastModified() < cutoff }?.forEach { it.delete() }

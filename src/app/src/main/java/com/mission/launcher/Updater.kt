@@ -22,7 +22,7 @@ import java.time.Instant
  * which is why app/mission.keystore is used for every build.
  */
 object Updater {
-    const val DEFAULT_REPO = "sure1234-del/Home-launcher-"
+    const val DEFAULT_REPO = "professorrr019-jpg/Mission2027"
 
     /** GitHub "owner/name" that publishes the APK. Changeable in Settings > About if you move to a new repo. */
     fun repo(): String = Store.s("update_repo", DEFAULT_REPO).trim().ifBlank { DEFAULT_REPO }
@@ -55,7 +55,14 @@ object Updater {
                 }
             }
             val a = pick ?: return null
+            // Build number from the release title ("... build 12"): newer number than the installed versionCode means update.
+            val bn = Regex("build\\s*(\\d+)", RegexOption.IGNORE_CASE).find(j.optString("name") + " " + j.optString("body"))?.groupValues?.get(1)?.toIntOrNull()
             val at = Instant.parse(a.optString("updated_at", j.optString("published_at"))).toEpochMilli()
+            if (bn != null) {
+                Store.put("update_checked", System.currentTimeMillis())
+                val installed = try { c.packageManager.getPackageInfo(c.packageName, 0).longVersionCode } catch (e: Exception) { 0L }
+                return if (bn + 100L > installed) Info(a.optString("browser_download_url"), a.optLong("size"), at, a.optString("name")) else null
+            }
             Store.put("update_checked", System.currentTimeMillis())
             if (at > installedAt(c) + 3 * 60000L) Info(a.optString("browser_download_url"), a.optLong("size"), at, a.optString("name")) else null
         } catch (e: Exception) {

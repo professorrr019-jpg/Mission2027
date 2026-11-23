@@ -141,7 +141,12 @@ object Zite {
                 )
             }
         val sylJ = if (cache.has("syl")) cache.optJSONArray("syl") else JSONArray(asset(c, "syllabus.json"))
-        val syl = parseTree(sylJ ?: JSONArray())
+        val syl = SylCanon.apply(parseTree(sylJ ?: JSONArray()))
+        try {
+            SylCanon.migrateDone()
+        } catch (e: Exception) {
+            Log.e("syl-migrate", e)
+        }
         val sr = HashMap<String, IntArray>()
         val mr = HashMap<String, IntArray>()
         val srJ =
@@ -176,7 +181,7 @@ object Zite {
                 year.toIntOrNull()?.let { pyqYears[it] = subjects }
             }
         }
-        return ZData(mocks, atts, syl, sr, mr, pyqYears, cache.optLong("updated", 0L), live)
+        return ZData(mocks, atts, syl, sr, SylCanon.mergeResp(mr), pyqYears, cache.optLong("updated", 0L), live)
     }
 
     private fun parseTree(a: JSONArray): List<Subj> =
@@ -496,7 +501,7 @@ object Zite {
             }
         }
 
-    fun stale(): Boolean = System.currentTimeMillis() - Store.l("zite_last_ok", 0) > 3600000L - 60000L
+    fun stale(): Boolean = System.currentTimeMillis() - Store.l("zite_last_ok", 0) > 600000L
 }
 
 // ======================= syllabus =======================

@@ -11,8 +11,8 @@ android {
         applicationId = "com.mission.launcher"
         minSdk = 30
         targetSdk = 35
-        versionCode = 7
-        versionName = "3.0"
+        versionCode = 100 + (System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 0)
+        versionName = "3.1"
     }
     // One fixed key for every build so a newer APK can be installed over the old one (and in-app update works).
     signingConfigs {

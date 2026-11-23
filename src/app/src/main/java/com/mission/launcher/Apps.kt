@@ -303,7 +303,7 @@ class DrawerView(val a: Activity, val onClose: () -> Unit) : FrameLayout(a) {
                                 id = View.generateViewId()
                                 gravity = Gravity.CENTER
                             }
-                        addView(icon, LinearLayout.LayoutParams(T.dp(Store.i("drawer_icon", 44)), T.dp(Store.i("drawer_icon", 44))))
+                        addView(icon, LinearLayout.LayoutParams(T.dp(Store.i("drawer_icon", 30)), T.dp(Store.i("drawer_icon", 30))))
                         addView(label, lp(-1, -2, 6))
                         tag = listOf(icon, label)
                     }
@@ -386,7 +386,7 @@ class DrawerView(val a: Activity, val onClose: () -> Unit) : FrameLayout(a) {
                     } else {
                         // automatic: as many columns as fit icon + label comfortably
                         val widthDp = a.resources.displayMetrics.widthPixels / a.resources.displayMetrics.density - 52
-                        (widthDp / (Store.i("drawer_icon", 44) + 34)).toInt().coerceIn(4, 14)
+                        (widthDp / (Store.i("drawer_icon", 30) + 34)).toInt().coerceIn(4, 14)
                     }
                 }
             verticalSpacing = T.dp(6)
@@ -560,6 +560,24 @@ class DrawerView(val a: Activity, val onClose: () -> Unit) : FrameLayout(a) {
                 ) {
                     a.toast("Cannot open shortcut")
                 }
+            }
+        }
+        val pinned = e.pkg in Apps.pins()
+        items.add(if (pinned) "Unpin from dock" else "Pin to dock")
+        acts.add {
+            val cur = Apps.pins().toMutableList()
+            if (pinned) {
+                cur.remove(e.pkg)
+                Store.setStringList("pins", cur)
+                Store.changed()
+                a.toast(e.label + " unpinned")
+            } else if (cur.size >= 5) {
+                a.toast("Dock is full (5). Unpin one first")
+            } else {
+                cur.add(e.pkg)
+                Store.setStringList("pins", cur)
+                Store.changed()
+                a.toast(e.label + " pinned to the dock")
             }
         }
         items.add("Open in floating window")

@@ -135,11 +135,11 @@ fun View.tap(
 }
 
 /** A white iOS-style rounded card with soft shadow. */
-class Card(c: Context, val radius: Int = 24) : LinearLayout(c) {
+class Card(c: Context, val radius: Int = 16) : LinearLayout(c) {
     init {
         orientation = VERTICAL
         background = T.round(T.card, radius)
-        if (Store.b("compact_cards", true)) padDp(14, 12, 14, 12) else padDp(18, 16, 18, 16)
+        if (Store.b("compact_cards", true)) padDp(7, 6, 7, 6) else padDp(10, 8, 10, 8)
         T.elevate(this, 3, radius)
         clipChildren = false
         clipToPadding = false
@@ -155,11 +155,11 @@ fun Context.cardHeader(
     hbox().apply {
         val chip =
             FrameLayout(context).apply {
-                background = T.round(T.withAlpha(tint, 0.16f), 9)
-                addView(IconView(context, icon, T.textAccent(tint), 16, 1.9f), FrameLayout.LayoutParams(T.dp(16), T.dp(16), Gravity.CENTER))
+                background = T.round(T.withAlpha(tint, 0.16f), 7)
+                addView(IconView(context, icon, T.textAccent(tint), 12, 1.9f), FrameLayout.LayoutParams(T.dp(12), T.dp(12), Gravity.CENTER))
             }
-        addView(chip, LinearLayout.LayoutParams(T.dp(30), T.dp(30)))
-        addView(text(title, 15f, 2, T.text), lpm(-2, -2, 10, 0, 0, 0, 1f))
+        addView(chip, LinearLayout.LayoutParams(T.dp(22), T.dp(22)))
+        addView(text(title, 12.5f, 2, T.text), lpm(-2, -2, 7, 0, 0, 0, 1f))
         if (trailing != null) addView(trailing)
     }
 
@@ -172,7 +172,7 @@ fun Context.pill(
 ): LinearLayout =
     hbox().apply {
         background = T.round(if (filled) color else T.inset, 14)
-        padDp(12, 8, 14, 8)
+        padDp(8, 5, 10, 5)
         gravity = Gravity.CENTER
         val foreground = if (filled) T.contentColor(color) else T.text
         if (icon != null) {
