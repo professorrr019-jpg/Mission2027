@@ -81,6 +81,13 @@ object Updater {
             Store.put("update_avail", 0L)
             return
         }
+        val hour = java.time.LocalTime.now(Repo.zone()).hour
+        if (Store.b("update_silent", true) && hour in 0..5 && unmetered(c) && c.packageManager.canRequestPackageInstalls() && Store.l("update_try", 0L) != info.at) {
+            // Night-time, Wi-Fi: update by itself. Android may still ask once; the receiver turns that into a notification.
+            Store.put("update_try", info.at)
+            install(c, info) { }
+            return
+        }
         if (Store.l("update_avail", 0L) == info.at) return
         Store.put("update_avail", info.at)
         try {
@@ -96,8 +103,20 @@ object Updater {
     }
 
     /** Downloads the APK and hands it to PackageInstaller. [say] is called on the UI thread with progress text. */
+    private fun ui(a: Context, f: () -> Unit) {
+        if (a is Activity) a.runOnUiThread { f() } else android.os.Handler(android.os.Looper.getMainLooper()).post { f() }
+    }
+
+    private fun unmetered(c: Context): Boolean =
+        try {
+            val cm = c.getSystemService(Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
+            cm.isActiveNetworkMetered.not()
+        } catch (e: Exception) {
+            false
+        }
+
     fun install(
-        a: Activity,
+        a: Context,
         info: Info,
         say: (String) -> Unit,
     ) {
@@ -130,14 +149,15 @@ object Updater {
                             val now = System.currentTimeMillis()
                             if (now - lastSay > 500) {
                                 lastSay = now
-                                a.runOnUiThread { say("Downloading " + (got / 1048576) + " / " + (total / 1048576) + " MB") }
+                                ui(a) { say("Downloading " + (got / 1048576) + " / " + (total / 1048576) + " MB") }
                             }
                         }
                     }
                 }
-                a.runOnUiThread { say("Installing...") }
+                ui(a) { say("Installing...") }
                 val pi = a.packageManager.packageInstaller
                 val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL)
+                if (android.os.Build.VERSION.SDK_INT >= 31) params.setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_NOT_REQUIRED)
                 val id = pi.createSession(params)
                 pi.openSession(id).use { s ->
                     f.inputStream().use { ins -> s.openWrite("mission.apk", 0, f.length()).use { o -> ins.copyTo(o); s.fsync(o) } }
@@ -146,7 +166,7 @@ object Updater {
                 }
             } catch (e: Exception) {
                 Log.e("update-install", e)
-                a.runOnUiThread { say("Update failed: " + (e.message ?: e.javaClass.simpleName).take(80)) }
+                ui(a) { say("Update failed: " + (e.message ?: e.javaClass.simpleName).take(80)) }
             }
         }.start()
     }
@@ -161,7 +181,15 @@ class UpdateReceiver : BroadcastReceiver() {
             PackageInstaller.STATUS_PENDING_USER_ACTION -> {
                 @Suppress("DEPRECATION")
                 val confirm = i.getParcelableExtra<Intent>(Intent.EXTRA_INTENT)
-                if (confirm != null) c.startActivity(confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                if (confirm != null) {
+                    try {
+                        c.startActivity(confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                    } catch (e: Exception) {
+                        // Started from the background: Android blocks the screen, so offer it as a notification.
+                        val pi = PendingIntent.getActivity(c, 4301, confirm, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+                        c.nm().notify(4301, Notification.Builder(c, CH_INFO).setSmallIcon(android.R.drawable.stat_sys_download_done).setContentTitle("Mission update is ready").setContentText("Tap to finish installing").setContentIntent(pi).setAutoCancel(true).build())
+                    }
+                }
             }
             PackageInstaller.STATUS_SUCCESS -> Store.put("update_avail", 0L)
             else -> {

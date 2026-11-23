@@ -783,7 +783,7 @@ object Wallpaper {
             Store.put("wp_next", 0L)
             return
         }
-        val at = TimeProvider.nextHalfHour(System.currentTimeMillis())
+        val at = TimeProvider.nextInterval(System.currentTimeMillis())
         Store.put("wp_next", at)
         Sched.wallpaper(c, at)
     }

@@ -18,6 +18,13 @@ object TimeProvider {
 
     fun millis(): Long = System.currentTimeMillis()
 
+    /** Next refresh boundary for the chosen wallpaper interval (15, 30, 60... minutes), aligned to the IST clock. */
+    fun nextInterval(nowMillis: Long = millis()): Long {
+        val iv = Store.i("wp_interval", 30).coerceIn(15, 240) * 60000L
+        val off = zone.rules.getOffset(Instant.ofEpochMilli(nowMillis)).totalSeconds * 1000L
+        return ((nowMillis + off) / iv + 1) * iv - off
+    }
+
     fun nextHalfHour(nowMillis: Long = millis()): Long {
         val now = Instant.ofEpochMilli(nowMillis).atZone(zone).toLocalDateTime()
         val minute = if (now.minute < 30) 30 else 0

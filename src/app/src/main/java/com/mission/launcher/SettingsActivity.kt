@@ -1355,6 +1355,7 @@ class SettingsActivity : Activity() {
                     ""
                 },
             ) { },
+            sw("Update by itself at night", "Installs new builds between 12 and 6 am on Wi-Fi (needs Install unknown apps)", "update_silent", true),
             action("link", T.slate, "Update source repo", Updater.repo()) {
                 Dlg.input(c, "GitHub repo (owner/name)", "e.g. sure1234-del/Home-launcher-", Updater.repo()) { v ->
                     if (Regex("[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+").matches(v)) {
