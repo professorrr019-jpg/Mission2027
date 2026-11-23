@@ -1,0 +1,100 @@
+name: Build APK
+
+on:
+  push:
+    branches: [main, master, feat/**]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+  GRADLE_OPTS: "-Dorg.gradle.daemon=false -Dorg.gradle.jvmargs=-Xmx3g"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Scan for secrets
+        continue-on-error: true
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Prepare project (any zip name, or plain folders)
+        run: |
+          if [ -f src/app/build.gradle.kts ]; then
+            echo "Using maintained source tree: src/"
+            mkdir -p proj
+            cp -R src/. proj/
+          elif [ -f app/build.gradle.kts ]; then
+            echo "Using root source tree"
+            mkdir -p proj
+            tar --exclude=./proj --exclude=./.git -cf - . | tar -xf - -C proj
+          else
+            # Zip mode: every *.zip in the repo root is unpacked into one folder (code zip + wallpaper zips merge by path).
+            ZIPS=$(ls ./*.zip 2>/dev/null || true)
+            if [ -z "$ZIPS" ]; then
+              echo "::error::Repo root me zip files upload karo (Mission2027-code.zip aur wallpaper-*.zip)"
+              exit 1
+            fi
+            mkdir -p unz
+            for Z in ./*.zip; do echo "Unpacking $Z"; unzip -q -o "$Z" -d unz; done
+            GR=$(find unz -maxdepth 4 -path '*/app/build.gradle.kts' | head -n 1)
+            if [ -z "$GR" ]; then echo "::error::app/build.gradle.kts zips me nahi mila"; exit 1; fi
+            mkdir -p proj
+            cp -R "$(dirname "$(dirname "$GR")")"/. proj/
+          fi
+          chmod +x proj/gradlew || true
+          ls -la proj
+          test -f proj/app/build.gradle.kts
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v5
+
+      - name: Build debug APK
+        working-directory: proj
+        run: ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: Run lint and unit tests (never blocks the APK)
+        continue-on-error: true
+        working-directory: proj
+        run: ./gradlew lint testDebugUnitTest --no-daemon --stacktrace
+
+      - name: Build release APK (never blocks the debug APK)
+        continue-on-error: true
+        working-directory: proj
+        run: ./gradlew assembleRelease --no-daemon --stacktrace
+
+      - name: Check APK exists
+        run: |
+          ls -la proj/app/build/outputs/apk/debug/
+          test -f proj/app/build/outputs/apk/debug/app-debug.apk
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: Mission-Launcher-APK
+          path: proj/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish release (optional, artifact still works if this fails)
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release delete latest -y --cleanup-tag || true
+          gh release create latest proj/app/build/outputs/apk/debug/app-debug.apk --title "Mission Launcher (latest)" --notes "Debug build ${{ github.sha }}"
