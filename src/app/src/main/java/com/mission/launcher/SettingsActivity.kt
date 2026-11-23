@@ -820,6 +820,7 @@ class SettingsActivity : Activity() {
             ) {
             },
             choice("Photo source", "online_src", "wiki", listOf("wiki" to "Wikimedia Commons: Prayagraj photos", "bing" to "Bing photo of the day (India)", "apod" to "NASA astronomy picture of the day")),
+            secret("NASA API key (optional)", { SecureStore.get("nasa") }, { SecureStore.put("nasa", it) }, "Free at api.nasa.gov, removes the shared DEMO_KEY limit"),
             action("refresh", T.teal, "Download photos now", if (Online.credit().isBlank()) "Needs internet. ${Online.files(this@SettingsActivity).size} saved" else Online.credit()) {
                 toast("Downloading...")
                 Online.refreshAsync(this@SettingsActivity, true) { n -> runOnUiThread { toast(if (n > 0) "$n photos ready, choose Apply now" else "No photo could be downloaded") ; redraw() } }

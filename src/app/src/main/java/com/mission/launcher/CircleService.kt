@@ -353,16 +353,45 @@ class CircleService : AccessibilityService() {
 
     /** Best effort: once Gemini is in front, press its send button so the search starts without another tap. */
     private fun autoSend(n: Int) {
-        if (n > 14 || !Store.b("circle_autosend", true)) return
+        if (n > 30 || !Store.b("circle_autosend", true)) return
         ui.postDelayed({
-            var clicked = false
+            var done = false
             try {
                 val root = rootInActiveWindow
-                if (root != null && root.packageName == GEMINI) clicked = clickSend(root, 0)
+                if (root != null && root.packageName == GEMINI) {
+                    val ed = findEditor(root, 0)
+                    val cur = ed?.text?.toString() ?: ""
+                    if (ed != null && !cur.contains(TAG)) {
+                        // Gemini drops the shared text when an image comes with it, so the tag + prompt is typed into its box here.
+                        val args = Bundle().putCharSequenceCompat(geminiPrompt())
+                        ed.performAction(AccessibilityNodeInfo.ACTION_FOCUS)
+                        if (!ed.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)) ed.performAction(AccessibilityNodeInfo.ACTION_PASTE)
+                    } else if (ed != null && n > 2) {
+                        done = clickSend(root, 0)
+                    }
+                }
             } catch (e: Exception) {
             }
-            if (!clicked) autoSend(n + 1)
-        }, 700)
+            if (!done) autoSend(n + 1)
+        }, 800)
+    }
+
+    private fun Bundle.putCharSequenceCompat(t: CharSequence): Bundle {
+        putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, t)
+        return this
+    }
+
+    private fun findEditor(
+        node: AccessibilityNodeInfo,
+        depth: Int,
+    ): AccessibilityNodeInfo? {
+        if (depth > 16) return null
+        if (node.isEditable || (node.className?.toString() ?: "").contains("EditText")) return node
+        for (k in 0 until node.childCount) {
+            val ch = node.getChild(k) ?: continue
+            findEditor(ch, depth + 1)?.let { return it }
+        }
+        return null
     }
 
     private fun clickSend(
@@ -385,6 +414,10 @@ class CircleService : AccessibilityService() {
     }
 
     private fun sendToLens(u: Uri) {
+        try {
+            (getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("UPSC prompt", geminiPrompt()))
+        } catch (e: Exception) {
+        }
         for (pkg in listOf("com.google.android.googlequicksearchbox", "com.google.ar.lens")) {
             val i = intentFor(u).setPackage(pkg)
             if (packageManager.queryIntentActivities(i, 0).isNotEmpty()) {

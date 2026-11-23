@@ -107,7 +107,7 @@ object Online {
     }
 
     private fun apod(c: Context): Int {
-        val j = JSONObject(get("https://api.nasa.gov/planetary/apod?api_key=DEMO_KEY") ?: return 0)
+        val j = JSONObject(get("https://api.nasa.gov/planetary/apod?api_key=" + SecureStore.get("nasa").ifBlank { "DEMO_KEY" }) ?: return 0)
         if (j.optString("media_type") != "image") return 0
         val url = j.optString("hdurl", j.optString("url"))
         val name = "apod_" + j.optString("date")

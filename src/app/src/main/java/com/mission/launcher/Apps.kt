@@ -49,6 +49,19 @@ object Apps {
         Store.changed()
     }
 
+    /** Drawer group: 2 Social, 3 Media, 4 Tools, 5 Google, 6 Other. */
+    fun group(e: AppEntry): Int {
+        val k = (e.pkg + " " + e.label).lowercase()
+        fun has(vararg w: String) = w.any { k.contains(it) }
+        return when {
+            has("whatsapp", "telegram", "instagram", "facebook", "twitter", "snapchat", "linkedin", "reddit", "discord", "signal", "sharechat", "messenger", "mms", "contacts", "dialer", "message") -> 2
+            has("youtube", "music", "spotify", "netflix", "hotstar", "gallery", "photo", "camera", "video", "player", "podcast", "jio", "gaana", "wynk", "prime", "mxplayer") -> 3
+            has("google", "gmail", "chrome", "maps", "drive", "bard", "gms") -> 5
+            has("setting", "calculator", "clock", "file", "scanner", "note", "flexcil", "pdf", "docs", "sheets", "cleaner", "security", "backup", "browser", "weather", "recorder", "compass", "translate", "excel", "word", "office", "miui", "xiaomi", "mi.") -> 4
+            else -> 6
+        }
+    }
+
     fun byPkg(p: String) = list.firstOrNull { it.pkg == p }
 
     fun load(
@@ -370,7 +383,7 @@ class DrawerView(val a: Activity, val onClose: () -> Unit) : FrameLayout(a) {
         top.addView(a.iconBtn("close", T.text2, 44) { close() })
         col.addView(top)
         col.addView(
-            Segmented(a, listOf("All apps", "Study", "Hidden"), 0) {
+            Segmented(a, listOf("All", "Study", "Social", "Media", "Tools", "Google", "Other", "Hidden"), 0) {
                 tab = it
                 refresh()
             },
@@ -432,7 +445,8 @@ class DrawerView(val a: Activity, val onClose: () -> Unit) : FrameLayout(a) {
         var l =
             when (tab) {
                 1 -> all.filter { it.pkg in study && it.pkg !in hid }
-                2 -> all.filter { it.pkg in hid }
+                7 -> all.filter { it.pkg in hid }
+                in 2..6 -> all.filter { it.pkg !in hid && Apps.group(it) == tab }
                 else -> all.filter { it.pkg !in hid }
             }
         if (Focus.active()) l = l.filter { Apps.allowedInFocus(a, it.pkg) }
@@ -589,6 +603,15 @@ class DrawerView(val a: Activity, val onClose: () -> Unit) : FrameLayout(a) {
         acts.add {
             close()
             Apps.launch(a, e.pkg, "split")
+        }
+        items.add("Split screen with another app...")
+        acts.add {
+            val others = Apps.list.filter { it.pkg != e.pkg && it.pkg !in Apps.hidden() }.sortedByDescending { it.pkg in Apps.pins() || it.pkg in Apps.study() }.take(30)
+            Dlg.choose(a, e.label + " + ?", others.map { it.label }) { j ->
+                close()
+                Apps.launch(a, e.pkg, "normal")
+                a.window.decorView.postDelayed({ Apps.launch(a, others[j].pkg, "split") }, 900)
+            }
         }
         items.add("Daily time limit" + (Guard.limits().optInt(e.pkg, 0).let { if (it > 0) " ($it min)" else "" }))
         acts.add {
