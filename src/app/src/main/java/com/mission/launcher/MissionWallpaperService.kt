@@ -124,6 +124,7 @@ class MissionWallpaperService : WallpaperService() {
 
             // The sky must follow the clock and the weather: re-render (off the main thread) when the 15-minute bucket,
             // the weather reading or the surface size changes. The old frame keeps being shown until the new one is ready.
+            if (Backdrop.ctx == null) Backdrop.ctx = applicationContext
             val snap = Weather.forRendering()
             val key = TimeProvider.millis() / (15 * 60 * 1000L) * 31 + (snap?.fetchedAt ?: 0L) / 60000L * 7 + (snap?.code ?: -1) +
                 renderWidth * 3L + (if (batterySaver) 1L else 0L)

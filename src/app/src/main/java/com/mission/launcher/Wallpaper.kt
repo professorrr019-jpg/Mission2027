@@ -209,6 +209,7 @@ object Scenes {
                     p.shader = null
                     celestial(cv, p, w, h, horizon, hour, L, hz, lunarPhase(date), date, weather)
                     clouds(cv, p, w, h, horizon, hour, L, hz, dayKey, 1f)
+                    ridges(cv, p, w, h, horizon, hz, L, dayKey, 5, 0xFF8995A8.toInt(), 0xFF40504A.toInt(), 0.2f)
                 } else {
                     // Live sky objects go on their own layer so the fort and bridge can hide them.
                     val layer = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
@@ -881,6 +882,7 @@ object Wallpaper {
         refreshWeather: Boolean = true,
     ): Boolean {
         try {
+            Backdrop.ctx = c.applicationContext
             if (liveActive(c)) {
                 Store.put("wp_last", System.currentTimeMillis())
                 if (refreshWeather) Weather.refreshIfNeeded(c)

@@ -24,12 +24,28 @@ object Backdrop {
     private var maskBmp: Bitmap? = null
     private var maskKey = ""
 
-    fun available(): Boolean =
-        try {
-            ctx?.assets?.list("wallpaper")?.contains("wp_n12.jpg") == true
+    @Volatile var lastError: String = ""
+
+    private fun fail(why: String, e: Throwable? = null) {
+        lastError = why
+        Log.e("backdrop", Exception(why + (e?.let { ": " + it.javaClass.simpleName + " " + (it.message ?: "") } ?: "")))
+    }
+
+    /** Opens a real asset instead of listing the folder, so a missing or unreadable file is detected exactly. */
+    fun available(): Boolean {
+        val c = ctx
+        if (c == null) {
+            fail("no context")
+            return false
+        }
+        return try {
+            c.assets.open("wallpaper/wp_n12.jpg").close()
+            true
         } catch (e: Exception) {
+            fail("asset wallpaper/wp_n12.jpg cannot be opened", e)
             false
         }
+    }
 
     @Synchronized
     fun clear() {
@@ -50,8 +66,20 @@ object Backdrop {
         return try {
             var ss = 1
             while (IW / (ss * 2) >= needW && ss < 4) ss *= 2
-            val o = BitmapFactory.Options().apply { inSampleSize = ss }
-            val b = c.assets.open("wallpaper/$name.jpg").use { BitmapFactory.decodeStream(it, null, o) } ?: return null
+            var b: Bitmap? = null
+            while (b == null && ss <= 8) {
+                try {
+                    val o = BitmapFactory.Options().apply { inSampleSize = ss }
+                    b = c.assets.open("wallpaper/$name.jpg").use { BitmapFactory.decodeStream(it, null, o) }
+                } catch (oom: OutOfMemoryError) {
+                    clearLocked()
+                    ss *= 2
+                }
+            }
+            if (b == null) {
+                fail("decode failed for $name")
+                return null
+            }
             while (cache.size >= 3) {
                 val k = cache.keys.first()
                 cache.remove(k)?.let { old -> if (!old.isRecycled) old.recycle() }
@@ -59,9 +87,14 @@ object Backdrop {
             cache[key] = b
             b
         } catch (e: Exception) {
-            Log.e("backdrop", e)
+            fail("load $name", e)
             null
         }
+    }
+
+    private fun clearLocked() {
+        cache.values.forEach { if (!it.isRecycled) it.recycle() }
+        cache.clear()
     }
 
     private fun smooth(t: Float) = t * t * (3 - 2 * t)

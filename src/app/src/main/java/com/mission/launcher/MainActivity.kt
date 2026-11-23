@@ -270,6 +270,7 @@ class MainActivity : Activity(), Host {
         }
         Sched.hourly(this)
         Water.arm(this)
+        Backdrop.ctx = applicationContext
         Targets.schedule(this)
         Auto.schedule(this)
         window.decorView.post { handleOpen(intent) }
