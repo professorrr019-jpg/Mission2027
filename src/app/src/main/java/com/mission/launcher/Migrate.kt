@@ -18,7 +18,7 @@ object Migrate {
             }
         }
         if (!Store.b("size_v2")) {
-            if (Store.i("dock_icon", 30) == 30) Store.put("dock_icon", 15)
+            Store.put("dock_icon", 25)
             Store.put("size_v2", true)
         }
         if (Store.b("migrated_v1")) return

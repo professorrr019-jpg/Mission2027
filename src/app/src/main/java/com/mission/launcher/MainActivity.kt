@@ -232,9 +232,10 @@ class MainActivity : Activity(), Host {
         dock =
             LinearLayout(this).apply {
                 gravity = Gravity.CENTER
-                background = T.round(T.card, 18)
-                T.elevate(this, 4, 18)
-                padDp(8, 5, 8, 5)
+                background = T.round(T.withAlpha(T.cardSolid, 0.62f), 26, 1, T.withAlpha(T.text, 0.12f))
+                T.elevate(this, 8, 26)
+                padDp(6, 4, 6, 4)
+                clipToOutline = true
             }
         content.addView(dock, FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL))
         updateEdgeHandle()
@@ -448,7 +449,7 @@ class MainActivity : Activity(), Host {
 
     // ---------- layout ----------
     private fun applyInsets() {
-        val dockH = if (dock.height > 0) dock.height else T.dp(Store.i("dock_icon", 15).coerceIn(10, 72) + 18)
+        val dockH = if (dock.height > 0) dock.height else T.dp(26 + 8)
         (dots.layoutParams as FrameLayout.LayoutParams).bottomMargin = botInset + T.dp(8) + dockH + T.dp(8)
         (dock.layoutParams as FrameLayout.LayoutParams).bottomMargin = botInset + T.dp(8)
         dock.post {
@@ -497,7 +498,7 @@ class MainActivity : Activity(), Host {
         attachGestures(sv)
         val col = vbox()
         val wide = resources.displayMetrics.widthPixels / resources.displayMetrics.density > 700
-        col.setPadding(T.dp(if (wide) 24 else 14), T.dp(8), T.dp(if (wide) 24 else 14), T.dp(maxOf(60, Store.i("dock_icon", 15).coerceIn(10, 72) + 18 + 14 + 24)) + botInset)
+        col.setPadding(T.dp(if (wide) 24 else 14), T.dp(8), T.dp(if (wide) 24 else 14), T.dp(maxOf(60, 26 + 8 + 14 + 24)) + botInset)
         val ids = if (Store.b("safe_mode", false)) emptyList() else HomeLayout.cards(p)
         if (editing) {
             col.addView(text(p.optString("name") + "  (page ${i + 1}/${layout.length()})", 13f, 3, T.text2).apply { padDp(6, 6, 6, 6) })
@@ -1128,12 +1129,21 @@ class MainActivity : Activity(), Host {
     private fun buildDock() {
         dock.removeAllViews()
         val pins = Apps.pins().mapNotNull { Apps.byPkg(it) }.take(5)
-        val pinSize = T.dp(Store.i("dock_icon", 15).coerceIn(10, 72))
+        val pinSize = T.dp(25)
+        val pinCell = T.dp(26)
         pins.forEach { e ->
             dock.addView(
-                ImageView(this).apply {
-                    scaleType = ImageView.ScaleType.FIT_CENTER
-                    setImageDrawable(e.icon.constantState?.newDrawable()?.mutate() ?: e.icon)
+                FrameLayout(this).apply {
+                    isClickable = true
+                    isFocusable = true
+                    contentDescription = e.label
+                    addView(
+                        ImageView(this@MainActivity).apply {
+                            scaleType = ImageView.ScaleType.FIT_CENTER
+                            setImageDrawable(e.icon.constantState?.newDrawable()?.mutate() ?: e.icon)
+                        },
+                        FrameLayout.LayoutParams(pinSize, pinSize, Gravity.CENTER),
+                    )
                     setOnClickListener { Apps.launch(this@MainActivity, e.pkg) }
                     setOnLongClickListener {
                         Dlg.choose(
@@ -1150,7 +1160,7 @@ class MainActivity : Activity(), Host {
                         true
                     }
                 },
-                lpm(pinSize, pinSize, 4, 0, 4, 0),
+                lpm(pinCell, pinCell, 3, 0, 3, 0),
             )
         }
         if (pins.isEmpty()) dock.addView(text("Pin apps in Settings > Apps", 12f, 1, T.text3).apply { padDp(10, 0, 10, 0) })
@@ -1160,7 +1170,7 @@ class MainActivity : Activity(), Host {
                 addView(icon("grid", T.text, 14, 1.8f), FrameLayout.LayoutParams(T.dp(14), T.dp(14), Gravity.CENTER))
                 tap { openDrawer() }
             },
-            lpm(T.dp(28), T.dp(28), 4, 0, 4, 0),
+            lpm(pinCell, pinCell, 3, 0, 3, 0),
         )
         var y0 = 0f
         dock.setOnTouchListener {
