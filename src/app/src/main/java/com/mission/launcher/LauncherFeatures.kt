@@ -19,6 +19,35 @@ import androidx.work.WorkerParameters
 import org.json.JSONArray
 import java.util.concurrent.TimeUnit
 
+object LauncherNavigation {
+    enum class BackStep {
+        CLOSE_PANEL,
+        CLOSE_FOLDER_OR_DRAWER,
+        CLOSE_EDITOR,
+        PREVIOUS_PAGE,
+        MOVE_TASK_BACK,
+    }
+
+    fun step(
+        hasPanel: Boolean,
+        hasDrawer: Boolean,
+        drawerInFolder: Boolean,
+        editing: Boolean,
+        pageIndex: Int,
+    ): BackStep =
+        when {
+            hasPanel -> BackStep.CLOSE_PANEL
+            hasDrawer && drawerInFolder -> BackStep.CLOSE_FOLDER_OR_DRAWER
+            hasDrawer -> BackStep.CLOSE_FOLDER_OR_DRAWER
+            editing -> BackStep.CLOSE_EDITOR
+            pageIndex > 0 -> BackStep.PREVIOUS_PAGE
+            else -> BackStep.MOVE_TASK_BACK
+        }
+
+    fun folderStep(folderOpen: Boolean, drawerOpen: Boolean): BackStep =
+        if (folderOpen) BackStep.CLOSE_FOLDER_OR_DRAWER else if (drawerOpen) BackStep.CLOSE_FOLDER_OR_DRAWER else BackStep.MOVE_TASK_BACK
+}
+
 object HomePresets {
     val names = listOf("Study", "Focus", "Minimal")
 
@@ -30,6 +59,7 @@ object HomePresets {
                 "Minimal" -> listOf(listOf("header", "countdown", "upcoming"), listOf("plan", "timer"), listOf("history"))
                 else -> return false
             }
+
         val current = HomeLayout.load()
         val widgets = (0 until current.length()).flatMap { HomeLayout.cards(current.getJSONObject(it)).filter { id -> id.startsWith("w:") } }
         val pages =
@@ -70,6 +100,66 @@ object HomePresets {
             Log.e("home-preset", e)
             false
         }
+    }
+}
+
+object AppFolders {
+    fun name(pkg: String): String = Store.s("app_folder_$pkg").trim()
+
+    fun set(pkg: String, name: String) {
+        val cleaned = name.trim().take(24)
+        if (cleaned.isEmpty()) Store.put("app_folder_$pkg", null) else Store.put("app_folder_$pkg", cleaned)
+        Store.changed()
+    }
+
+    fun names(): List<String> =
+        Apps.list.mapNotNull { entry ->
+            name(entry.pkg).takeIf { it.isNotBlank() }
+        }.distinct().sortedBy { it.lowercase() }
+
+    fun packages(folder: String): Set<String> =
+        Apps.list.map { it.pkg }.filter { name(it).equals(folder, ignoreCase = true) }.toSet()
+}
+
+object LauncherRecents {
+    private const val KEY = "launcher_recents"
+
+    fun record(pkg: String) {
+        val recents = Store.stringList(KEY).toMutableList()
+        recents.remove(pkg)
+        recents.add(0, pkg)
+        Store.setStringList(KEY, recents.take(20))
+        Store.changed()
+    }
+
+    fun packages(): List<String> = Store.stringList(KEY)
+}
+
+object SearchHistory {
+    private const val KEY = "launcher_search_history"
+
+    fun add(query: String) {
+        val value = query.trim()
+        if (value.length < 2) return
+        val history = Store.stringList(KEY).toMutableList()
+        history.removeAll { it.equals(value, ignoreCase = true) }
+        history.add(0, value)
+        Store.setStringList(KEY, history.take(12))
+        Store.changed()
+    }
+
+    fun entries(): List<String> = Store.stringList(KEY)
+}
+
+object LauncherHaptics {
+    fun tap(view: android.view.View) {
+        if (!Store.b("launcher_haptics", true)) return
+        view.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
+    }
+
+    fun confirm(view: android.view.View) {
+        if (!Store.b("launcher_haptics", true)) return
+        view.performHapticFeedback(android.view.HapticFeedbackConstants.CONFIRM)
     }
 }
 

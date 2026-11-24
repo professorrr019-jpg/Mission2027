@@ -110,6 +110,8 @@ object Apps {
             a.toast("Focus session running - ${Focus.left() / 60} min left")
             return
         }
+        LauncherRecents.record(pkg)
+        LauncherHaptics.tap(a.window.decorView)
         val go = { Guard.check(a, pkg) { doLaunch(a, pkg, if (mode == "normal") Store.s("open_mode", "normal") else mode) } }
         AppLock.require(a, pkg, go)
     }
@@ -310,6 +312,7 @@ object Usage {
 class DrawerView(val a: Activity, val onClose: () -> Unit) : FrameLayout(a) {
     private var tab = 0
     private var query = ""
+    private var folderFilter = ""
     private var shown: List<AppEntry> = emptyList()
     private val grid = GridView(a)
     private val extra = a.vbox()
@@ -393,6 +396,7 @@ class DrawerView(val a: Activity, val onClose: () -> Unit) : FrameLayout(a) {
                 )
                 setOnEditorActionListener { _, id, ev ->
                     if (id == EditorInfo.IME_ACTION_GO || ev?.keyCode == KeyEvent.KEYCODE_ENTER) {
+                        if (query.isNotBlank()) SearchHistory.add(query)
                         shown.firstOrNull()?.let { open(it.pkg) }
                         true
                     } else {
@@ -405,9 +409,29 @@ class DrawerView(val a: Activity, val onClose: () -> Unit) : FrameLayout(a) {
         top.addView(a.iconBtn("close", T.text2, 44) { close() })
         col.addView(top)
         col.addView(
-            Segmented(a, listOf("All", "Study", "Social", "Media", "Tools", "Google", "Other", "Hidden"), 0) {
+            Segmented(
+                a,
+                listOf("All", "Study", "Social", "Media", "Tools", "Google", "Other", "Recent", "Hidden", "Folders"),
+                0,
+            ) {
                 tab = it
-                refresh()
+                if (tab == 9) {
+                    val names = AppFolders.names()
+                    if (names.isEmpty()) {
+                        folderFilter = ""
+                        a.toast("Create a folder from an app's long-press menu")
+                        tab = 0
+                        refresh()
+                    } else {
+                        Dlg.choose(a, "Open folder", names) { index ->
+                            folderFilter = names[index]
+                            refresh()
+                        }
+                    }
+                } else {
+                    folderFilter = ""
+                    refresh()
+                }
             },
             lp(-2, -2, 12),
         )
@@ -467,7 +491,11 @@ class DrawerView(val a: Activity, val onClose: () -> Unit) : FrameLayout(a) {
         var l =
             when (tab) {
                 1 -> all.filter { it.pkg in study && it.pkg !in hid }
-                7 -> all.filter { it.pkg in hid }
+                7 -> all.filter { it.pkg !in hid }.sortedBy { entry ->
+                    LauncherRecents.packages().indexOf(entry.pkg).let { index -> if (index < 0) 100 else index }
+                }
+                8 -> all.filter { it.pkg in hid }
+                9 -> all.filter { it.pkg !in hid && AppFolders.name(it.pkg).equals(folderFilter, ignoreCase = true) }
                 in 2..6 -> all.filter { it.pkg !in hid && Apps.group(it) == tab }
                 else -> all.filter { it.pkg !in hid }
             }
@@ -490,9 +518,45 @@ class DrawerView(val a: Activity, val onClose: () -> Unit) : FrameLayout(a) {
         }
     }
 
+    fun goBack(): Boolean {
+        if (folderFilter.isNotBlank()) {
+            folderFilter = ""
+            tab = 9
+            refresh()
+            return true
+        }
+        onClose()
+        return true
+    }
+
+    fun inFolder(): Boolean = folderFilter.isNotBlank()
+
     /** Notes, tasks and syllabus topics matching the query, shown above the apps. */
     private fun universal() {
         extra.removeAllViews()
+        if (query.isBlank()) {
+            val history = SearchHistory.entries().take(6)
+            if (history.isNotEmpty()) {
+                extra.addView(a.text("RECENT SEARCHES", 10f, 2, T.text3), lp(-1, -2, 4))
+                history.forEach { value ->
+                    extra.addView(
+                        a.hbox().apply {
+                            padDp(12, 8, 12, 8)
+                            background = T.round(T.card, 12)
+                            addView(a.text(value, 12.5f, 1, T.text), LinearLayout.LayoutParams(0, -2, 1f))
+                            addView(a.icon("chevl", T.text3, 16, 2f))
+                            tap {
+                                query = value
+                                search.setText(value)
+                                search.setSelection(value.length)
+                            }
+                        },
+                        lp(-1, -2, 4),
+                    )
+                }
+            }
+            return
+        }
         if (query.length < 2) return
 
         fun row(
@@ -572,6 +636,7 @@ class DrawerView(val a: Activity, val onClose: () -> Unit) : FrameLayout(a) {
     }
 
     private fun open(pkg: String) {
+        if (query.isNotBlank()) SearchHistory.add(query)
         close()
         Apps.launch(a, pkg)
     }
@@ -671,6 +736,49 @@ class DrawerView(val a: Activity, val onClose: () -> Unit) : FrameLayout(a) {
         acts.add {
             Apps.toggleList("study_apps", e.pkg)
             refresh()
+        }
+        val folder = AppFolders.name(e.pkg)
+        items.add(if (folder.isBlank()) "Add to folder" else "Move/change folder ($folder)")
+        acts.add {
+            val names = AppFolders.names()
+            val choices =
+                if (folder.isBlank()) {
+                    names
+                } else {
+                    listOf("Remove from $folder") + names.filter { it != folder }
+                }
+            if (choices.isEmpty()) {
+                Dlg.input(a, "Folder name", "e.g. UPSC, Work, Social", "") { name ->
+                    if (name.isNotBlank()) {
+                        AppFolders.set(e.pkg, name)
+                        a.toast("Moved to $name")
+                        refresh()
+                    }
+                }
+            } else {
+                Dlg.choose(a, "Choose folder", choices + "+ New folder") { index ->
+                    if (!folder.isBlank() && index == 0) {
+                        AppFolders.set(e.pkg, "")
+                        a.toast("Removed from folder")
+                        refresh()
+                    } else if (index == choices.size) {
+                        Dlg.input(a, "Folder name", "e.g. UPSC, Work, Social", "") { name ->
+                            if (name.isNotBlank()) {
+                                AppFolders.set(e.pkg, name)
+                                a.toast("Moved to $name")
+                                refresh()
+                            }
+                        }
+                    } else {
+                        val target = if (folder.isBlank()) choices[index] else choices[index].takeIf { it != "Remove from $folder" }
+                        if (!target.isNullOrBlank()) {
+                            AppFolders.set(e.pkg, target)
+                            a.toast("Moved to $target")
+                            refresh()
+                        }
+                    }
+                }
+            }
         }
         items.add(if (hid) "Unhide" else "Hide from drawer")
         acts.add {

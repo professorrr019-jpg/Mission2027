@@ -35,6 +35,7 @@ class SettingsActivity : Activity() {
     private val REQ_IMPORT = 83
     private val REQ_PHOTO = 84
     private val ui = Handler(Looper.getMainLooper())
+    private var backCallback: android.window.OnBackInvokedCallback? = null
 
     override fun onCreate(b: Bundle?) {
         super.onCreate(b)
@@ -73,6 +74,14 @@ class SettingsActivity : Activity() {
         )
         root.addView(holder, LinearLayout.LayoutParams(-1, 0, 1f))
         setContentView(root)
+        if (Build.VERSION.SDK_INT >= 33) {
+            val callback = android.window.OnBackInvokedCallback { goBack() }
+            backCallback = callback
+            onBackInvokedDispatcher.registerOnBackInvokedCallback(
+                android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT,
+                callback,
+            )
+        }
         push(Page("Settings") { home() })
         intent.getStringExtra("path")?.let {
                 p ->
@@ -88,6 +97,14 @@ class SettingsActivity : Activity() {
 
     @Suppress("OVERRIDE_DEPRECATION")
     override fun onBackPressed() = goBack()
+
+    override fun onDestroy() {
+        if (Build.VERSION.SDK_INT >= 33) {
+            backCallback?.let(onBackInvokedDispatcher::unregisterOnBackInvokedCallback)
+            backCallback = null
+        }
+        super.onDestroy()
+    }
 
     private fun goBack() {
         if (stack.size > 1) {
@@ -1049,6 +1066,23 @@ class SettingsActivity : Activity() {
             },
             sw("Hide bottom navigation bar", "Removes the gesture pill on home. Swipe up from the bottom edge to show it briefly", "hide_nav", true),
             sw("Auto-hiding left edge handle", "Tap to open the app drawer; hidden after inactivity", "edge_handle", false),
+            sw("Lock home layout", "Prevent accidental add, remove and move actions", "lock_home_layout", false),
+            sw("Launcher haptics", "Use light confirmation feedback for launcher actions", "launcher_haptics", true),
+            sw("Reduced motion", "Disable large pager and interface animations", "reduce_motion", false),
+            sw("Two-finger quick capture", "Pinch with two fingers on home to open Quick Capture", "two_finger_capture", true),
+            choice(
+                "Bottom swipe action",
+                "bottom_gesture",
+                "drawer",
+                listOf(
+                    "drawer" to "Open app drawer",
+                    "recents" to "Open recent apps",
+                    "right" to "Open right control panel",
+                    "note" to "Create quick note",
+                    "chat" to "Open Mission AI",
+                ),
+            ),
+            num("Bottom swipe sensitivity", "gesture_sensitivity", 130, 70, 220, "px", "Smaller value opens the action with a shorter swipe"),
         )
         note(
             "New installs start with empty home pages. Tap the sliders icon on the home header or long-press the page dots to choose your cards. Pins are set under Apps and dock.",
@@ -1071,6 +1105,20 @@ class SettingsActivity : Activity() {
             },
             action("book", T.sage, "Study apps", "${Apps.study().size} apps in Study tab and allowed in focus") {
                 multiPick("Study apps", "study_apps")
+            },
+            action("clock", T.slate, "Clear recent apps", "${LauncherRecents.packages().size} remembered") {
+                Dlg.confirm(this@SettingsActivity, "Clear launcher recents?", "Search and launch suggestions will no longer show old apps.", "Clear") {
+                    Store.put("launcher_recents", "")
+                    Store.changed()
+                    redraw()
+                }
+            },
+            action("search", T.plum, "Clear search history", "${SearchHistory.entries().size} searches saved") {
+                Dlg.confirm(this@SettingsActivity, "Clear app search history?", "Only recent search suggestions will be cleared.", "Clear") {
+                    Store.put("launcher_search_history", "")
+                    Store.changed()
+                    redraw()
+                }
             },
         )
         label("Memory cleaner")

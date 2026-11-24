@@ -68,7 +68,7 @@ class Pager(c: Context) : FrameLayout(c) {
         val t = i.coerceIn(0, maxOf(0, childCount - 1))
         index = t
         anim?.cancel()
-        if (!animate) {
+        if (!animate || Store.b("reduce_motion", false)) {
             pos = t.toFloat()
             applyPos()
             onSettled?.invoke(t)

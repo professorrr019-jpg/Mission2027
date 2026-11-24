@@ -130,6 +130,8 @@ class MainActivity : Activity(), Host {
     private var edgeHandle: View? = null
     private var rightHandle: View? = null
     private var rightPanel: View? = null
+    private var backCallback: android.window.OnBackInvokedCallback? = null
+    private var bottomEdgeDown = false
     private val edgeHide =
         Runnable {
             edgeHandle?.let { h ->
@@ -200,6 +202,17 @@ class MainActivity : Activity(), Host {
         widgetHost = AppWidgetHost(this, 1024)
         root = FrameLayout(this)
         setContentView(root)
+        if (Build.VERSION.SDK_INT >= 33) {
+            val callback =
+                android.window.OnBackInvokedCallback {
+                    handleBack()
+                }
+            backCallback = callback
+            onBackInvokedDispatcher.registerOnBackInvokedCallback(
+                android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT,
+                callback,
+            )
+        }
         root.setOnApplyWindowInsetsListener {
                 _,
                 ins,
@@ -303,6 +316,10 @@ class MainActivity : Activity(), Host {
 
     override fun onDestroy() {
         super.onDestroy()
+        if (Build.VERSION.SDK_INT >= 33) {
+            backCallback?.let(onBackInvokedDispatcher::unregisterOnBackInvokedCallback)
+            backCallback = null
+        }
         Store.listeners.remove(listener)
         try {
             unregisterReceiver(pkgReceiver)
@@ -403,17 +420,29 @@ class MainActivity : Activity(), Host {
 
     @Suppress("OVERRIDE_DEPRECATION")
     override fun onBackPressed() {
+        handleBack()
+    }
+
+    private fun handleBack() {
         val g = gateView as? PinPad
         if (g != null) {
             if (g.allowCancel) g.onCancel() // a mandatory home PIN simply swallows Back
             return
         }
-        if (drawer != null) {
-            closeDrawer()
-        } else if (editing) {
-            toggleEdit()
-        } else {
-            pager.goTo(0)
+        val step =
+            LauncherNavigation.step(
+                hasPanel = rightPanel != null,
+                hasDrawer = drawer != null,
+                drawerInFolder = drawer?.inFolder() == true,
+                editing = editing,
+                pageIndex = pager.index,
+            )
+        when (step) {
+            LauncherNavigation.BackStep.CLOSE_PANEL -> closeRightPanel()
+            LauncherNavigation.BackStep.CLOSE_FOLDER_OR_DRAWER -> drawer?.goBack()
+            LauncherNavigation.BackStep.CLOSE_EDITOR -> toggleEdit()
+            LauncherNavigation.BackStep.PREVIOUS_PAGE -> pager.goTo(pager.index - 1)
+            LauncherNavigation.BackStep.MOVE_TASK_BACK -> moveTaskToBack(true)
         }
     }
 
@@ -600,6 +629,7 @@ class MainActivity : Activity(), Host {
     private var dy0 = 0f
     private var topAtDown = false
     private var hotCornerDown = -1
+    private var bottomEdgeDown = false
 
     override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
         if (FeatureRegistry.enabled("x34_keyboard_spotlight") && drawer == null && gateView == null && rightPanel == null && !editing && event.action == android.view.KeyEvent.ACTION_DOWN && event.repeatCount == 0 && currentFocus !is EditText) {
@@ -617,6 +647,11 @@ class MainActivity : Activity(), Host {
     }
 
     override fun dispatchTouchEvent(e: MotionEvent): Boolean {
+        if (Store.b("two_finger_capture", true) && e.actionMasked == MotionEvent.ACTION_POINTER_DOWN && e.pointerCount == 2 && drawer == null && gateView == null) {
+            startActivity(Intent(this, CaptureActivity::class.java))
+            LauncherHaptics.confirm(root)
+            return true
+        }
         if (FeatureRegistry.enabled("x35_stylus_note") && e.actionMasked == MotionEvent.ACTION_BUTTON_PRESS && e.pointerCount > 0 &&
             e.getToolType(0) == MotionEvent.TOOL_TYPE_STYLUS && e.buttonState and (MotionEvent.BUTTON_STYLUS_PRIMARY or MotionEvent.BUTTON_STYLUS_SECONDARY) != 0
         ) {
@@ -630,10 +665,23 @@ class MainActivity : Activity(), Host {
                     dy0 = e.rawY
                     topAtDown = (pager.getChildAt(pager.index) as? ScrollView)?.scrollY == 0
                     hotCornerDown = if (FeatureRegistry.enabled("x37_hot_corners")) hotCornerAt(e.rawX, e.rawY) else -1
+                    bottomEdgeDown = e.rawY >= resources.displayMetrics.heightPixels - botInset - T.dp(Store.i("bottom_gesture_edge", 44))
                 }
                 MotionEvent.ACTION_UP -> {
                     val dy = e.rawY - dy0
                     val dx = e.rawX - dx0
+                    if (bottomEdgeDown && dy < -T.dp(Store.i("gesture_sensitivity", 130).coerceIn(70, 220)) && Math.abs(dx) < Math.abs(dy) * 0.8f) {
+                        bottomEdgeDown = false
+                        when (Store.s("bottom_gesture", "drawer")) {
+                            "right" -> openRightPanel()
+                            "note" -> startActivity(Intent(this, VoiceNoteActivity::class.java))
+                            "chat" -> openChat()
+                            "recents" -> openRecentSwitcher()
+                            else -> openDrawer()
+                        }
+                        LauncherHaptics.confirm(root)
+                        return true
+                    }
                     val hotCornerUp = if (FeatureRegistry.enabled("x37_hot_corners")) hotCornerAt(e.rawX, e.rawY) else -1
                     if (hotCornerDown >= 0 && hotCornerDown == hotCornerUp && kotlin.math.abs(dx) < T.dp(12) && kotlin.math.abs(dy) < T.dp(12)) {
                         val corner = hotCornerDown
@@ -777,6 +825,10 @@ class MainActivity : Activity(), Host {
 
     // ---------- editing ----------
     override fun toggleEdit() {
+        if (!editing && Store.b("lock_home_layout", false)) {
+            toast("Home layout is locked in Settings")
+            return
+        }
         editing = !editing
         dock.visibility = if (editing) View.GONE else View.VISIBLE
         editBar.visibility = if (editing) View.VISIBLE else View.GONE
@@ -801,6 +853,10 @@ class MainActivity : Activity(), Host {
     }
 
     private fun mutate(f: (JSONArray) -> Unit) {
+        if (Store.b("lock_home_layout", false)) {
+            toast("Home layout is locked")
+            return
+        }
         val a = HomeLayout.load()
         f(a)
         HomeLayout.save(a)
@@ -1161,6 +1217,10 @@ class MainActivity : Activity(), Host {
         }
     }
 
+    private fun openRecentSwitcher() {
+        openRightPanel()
+    }
+
     private fun openRightPanel() {
         if (drawer != null || gateView != null || editing || rightPanel != null) return
         val overlay =
@@ -1178,6 +1238,28 @@ class MainActivity : Activity(), Host {
                 setOnClickListener { }
             }
         panel.addView(text("Quick controls", 18f, 3), lp(-1, -2, 10))
+        val recentRow = hbox()
+        var recentCount = 0
+        LauncherRecents.packages().mapNotNull(Apps::byPkg).take(5).forEach { entry ->
+            recentCount++
+            recentRow.addView(
+                FrameLayout(this).apply {
+                    background = T.round(T.inset, 18)
+                    padDp(8, 8, 8, 8)
+                    addView(
+                        ImageView(this@MainActivity).apply {
+                            scaleType = ImageView.ScaleType.FIT_CENTER
+                            setImageDrawable(entry.icon.constantState?.newDrawable()?.mutate() ?: entry.icon)
+                        },
+                        FrameLayout.LayoutParams(T.dp(34), T.dp(34), Gravity.CENTER),
+                    )
+                    contentDescription = entry.label
+                    tap { closeRightPanel(); Apps.launch(this@MainActivity, entry.pkg) }
+                },
+                lpm(T.dp(50), T.dp(50), 4, 0, 4, 0),
+            )
+        }
+        if (recentCount > 0) panel.addView(recentRow, lp(-1, -2, 8))
         panel.addView(pill("Search apps", "search", false) { closeRightPanel(); openDrawer() }, lp(-1, -2, 6))
         panel.addView(pill("Quick note", "note", false) { closeRightPanel(); startActivity(Intent(this, VoiceNoteActivity::class.java)) }, lp(-1, -2, 6))
         panel.addView(
