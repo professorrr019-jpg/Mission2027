@@ -275,6 +275,7 @@ class MainActivity : Activity(), Host {
         Targets.schedule(this)
         Auto.schedule(this)
         Cleaner.schedule(this)
+        Plus.shortcuts(this)
         window.decorView.post { handleOpen(intent) }
         Wallpaper.scheduleNext(this)
         if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {

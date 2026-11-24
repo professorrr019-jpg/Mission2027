@@ -163,7 +163,7 @@ object Toolkit {
         if (a == null) c.toast("Open from the app to confirm with the password") else ResetGate.verifyAndBackup(a, f)
     }
 
-    private fun row(c: android.content.Context, ic: String, title: String, sub: String, tint: Int, f: () -> Unit): View =
+    fun row(c: android.content.Context, ic: String, title: String, sub: String, tint: Int, f: () -> Unit): View =
         c.hbox().apply {
             background = T.round(T.inset, 14)
             padDp(10, 9, 10, 9)
@@ -205,7 +205,7 @@ object Toolkit {
     }
 
     // ---------------- logs ----------------
-    private fun logDialog(c: android.content.Context, kind: String, title: String, hint: String) {
+    fun logDialog(c: android.content.Context, kind: String, title: String, hint: String) {
         val box = c.vbox()
         fun fill() {
             box.removeAllViews()
@@ -457,7 +457,7 @@ object Toolkit {
     }
 
     // ---------------- generators ----------------
-    private fun generator(c: android.content.Context, title: String, list: List<String>, label: String) {
+    fun generator(c: android.content.Context, title: String, list: List<String>, label: String) {
         var i = (today().toEpochDay() % list.size).toInt()
         val t = c.text(list[i], 15f, 1, T.text, 0)
         val box = c.vbox()
