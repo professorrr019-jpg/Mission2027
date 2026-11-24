@@ -386,6 +386,29 @@ class SettingsActivity : Activity() {
     // ---------- root ----------
     private fun LinearLayout.home() {
         val z = Zite.data(this@SettingsActivity)
+        group(
+            action("search", T.accent, "Search settings", "Type a word like wallpaper, water, update, circle, clean") {
+                Dlg.input(this@SettingsActivity, "Search settings", "wallpaper, water, pin...", "") { q ->
+                    val pages: List<Pair<String, LinearLayout.() -> Unit>> =
+                        listOf(
+                            "Water reminders goal" to { water() }, "Study timer focus pomodoro distraction" to { study() }, "Exam date countdown" to { exam() },
+                            "Gestures double tap swipe floating multitask" to { gestures() }, "Circle to Search Gemini prompt tag float" to { circle() },
+                            "Limits mindfulness app time" to { limits() }, "Daily briefs morning evening" to { briefs() }, "Wallpaper photo online 4K live interval" to { wallpaper() },
+                            "Home screen pages widgets layout navigation bar" to { homeScreen() }, "Apps dock pin hidden study memory cleaner clean" to { apps() },
+                            "Appearance theme text size card small icon" to { appearance() }, "Security PIN lock" to { security() }, "Backup restore" to { backup() },
+                            "Permissions overlay usage notification" to { permissions() }, "Features tools flashcards checklist" to { features() },
+                            "About update diagnostics version auto update" to { about() }, "Zite sync API key database" to { zite() }, "AI provider key Gemini model" to { ai() },
+                        )
+                    val hits = pages.filter { it.first.contains(q.trim(), true) }
+                    when {
+                        q.isBlank() -> toast("Type something")
+                        hits.isEmpty() -> toast("No setting found")
+                        hits.size == 1 -> push(Page(hits[0].first.substringBefore(" "), hits[0].second))
+                        else -> Dlg.choose(this@SettingsActivity, "Found", hits.map { it.first.take(40) }) { i -> push(Page(hits[i].first.substringBefore(" "), hits[i].second)) }
+                    }
+                }
+            },
+        )
         group(folder("checkc", T.sage, "Setup checklist", "${setupItems().count { it.ok }} of ${setupItems().size} ready") { setup() })
         group(folder("shield", T.danger, "Reset and data", "Password-protected cache deletion and restore") { resetData() })
         group(
@@ -433,17 +456,34 @@ class SettingsActivity : Activity() {
     private fun LinearLayout.features() {
         label("Syllabus")
         group(sw("Show Mains", "Adds Mains-only subjects and answer-writing tools", "show_mains", false))
-        label("Optional features")
         val mainsOn = Store.b("show_mains", false)
-        FeatureRegistry.features.forEach { feature ->
+        label("Working tools (tap to open)")
+        val c = this@SettingsActivity
+        val open: Map<String, () -> Unit> =
+            mapOf(
+                "x01_flashcards" to { Toolkit.flashDialog(c) },
+                "x04_affairs" to { Toolkit.caDialog(c) },
+                "x05_weekly_review" to { Toolkit.reportDialog(c) },
+                "x06_smart_plan" to { Toolkit.topDialog(c) },
+                "x14_streak_freeze" to { Toolkit.streakBoard(c) },
+                "x15_goal_rings" to { Toolkit.pointsDialog(c) },
+                "x19_clipboard_notes" to { Toolkit.clipSave(c) },
+                "x22_automation" to { Auto.open(c) },
+                "x23_automation_templates" to { Auto.open(c) },
+                "x26_app_limits" to { push(Page("Limits and mindfulness") { limits() }) },
+                "x28_briefs" to { push(Page("Daily briefs") { briefs() }) },
+                "x31_report_share" to { Toolkit.reportDialog(c) },
+                "x44_streak_heatmap" to { Toolkit.streakBoard(c) },
+                "x49_today_dashboard" to { Toolkit.open(c) },
+                "x50_diagnostics" to { push(Page("About and diagnostics") { about() }) },
+            )
+        val live = FeatureRegistry.features.filter { it.id in open }
+        group(*live.map { f -> action("sparkle", T.sage, f.title, "Works now. Tap to open") { open[f.id]?.invoke() } }.toTypedArray())
+        label("Planned (switch is saved but has no effect yet)")
+        FeatureRegistry.features.filter { it.id !in open }.forEach { feature ->
             if (feature.id == "x03_answer_timer" && !mainsOn) return@forEach
             group(
-                sw(
-                    feature.title,
-                    "Feature toggle · ${feature.id}",
-                    feature.id,
-                    feature.defaultEnabled,
-                ) { enabled ->
+                sw(feature.title, "Planned feature · ${feature.id}", feature.id, feature.defaultEnabled) { enabled ->
                     FeatureRegistry.setEnabled(feature, enabled)
                 },
             )

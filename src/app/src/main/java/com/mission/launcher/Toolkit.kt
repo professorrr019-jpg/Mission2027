@@ -21,6 +21,11 @@ object Toolkit {
             Triple("essay", "Essay practice", "Essays / outlines written today"),
             Triple("urge", "Distraction urges resisted", "Times you resisted the phone today"),
             Triple("rounds", "Revision rounds", "Revision rounds done today"),
+            Triple("mcq", "MCQ practice", "MCQs solved today (count each 10 as 1 if you like)"),
+            Triple("editorial", "Editorial reading", "Editorials read today"),
+            Triple("flash", "Flashcards reviewed", "Flashcard sessions done today"),
+            Triple("mockt", "Mock tests", "Mock tests attempted today"),
+            Triple("vocab", "Vocabulary / terms", "New terms learned today"),
         )
     private val LOGS =
         listOf(
@@ -29,6 +34,39 @@ object Toolkit {
             Triple("mood", "Energy and mood log", "How is focus and energy right now?"),
             Triple("ethics", "Ethics reflection", "A GS4 case, stand and reasoning"),
             Triple("sleep", "Sleep and wake log", "Slept / woke at, how it felt"),
+            Triple("doubt", "Doubt list", "A doubt to clear with a teacher or book"),
+            Triple("ca1", "Current-affairs one-liners", "Fact, date, place or number worth remembering"),
+            Triple("map", "Map practice", "Place, river, mountain or site you located"),
+            Triple("interview", "Interview and DAF prep", "Hobby, state, service or opinion you must be ready on"),
+            Triple("win", "Daily wins", "One thing that went well today"),
+            Triple("idea", "Ideas and reminders", "Anything you do not want to forget"),
+            Triple("fc", "Flashcards (question | answer)", "Write like:  Article 21 | Right to life and personal liberty"),
+            Triple("clip", "Saved from clipboard", "Text copied from other apps"),
+        )
+    private val MAPS =
+        listOf(
+            "Locate: Sangam, Prayagraj (Ganga-Yamuna-Saraswati)", "Locate: Western Ghats, Eastern Ghats and Nilgiri", "Locate: Narmada and Tapti, both west-flowing",
+            "Locate: Chilika, Pulicat and Vembanad", "Locate: Siachen, Zoji La, Nathu La", "Locate: Strait of Hormuz, Malacca and Bab-el-Mandeb",
+            "Locate: Ramsar sites of Rajasthan and Odisha", "Locate: Tiger reserves of Madhya Pradesh", "Locate: Indus Valley sites: Dholavira, Lothal, Rakhigarhi",
+            "Locate: Major ports: Kandla, JNPT, Kochi, Paradip", "Locate: Black Sea, Caspian Sea and their neighbours", "Locate: Gulf of Mannar and Palk Strait",
+        )
+    private val FACTS =
+        listOf(
+            "Fundamental Rights are in Part III, Articles 12 to 35", "DPSP are in Part IV, Articles 36 to 51", "Fundamental Duties: Part IVA, Article 51A, added by 42nd Amendment",
+            "Money Bill: Article 110, Rajya Sabha can only recommend", "President's rule: Article 356; Financial emergency: Article 360", "Ramsar convention was signed in 1971",
+            "Montreal Protocol 1987 protects the ozone layer", "Kyoto Protocol 1997; Paris Agreement 2015", "GST council: Article 279A", "Finance Commission: Article 280, every 5 years",
+            "Gharial is Critically Endangered, found in National Chambal Sanctuary", "Tropic of Cancer passes through 8 Indian states",
+        )
+    private val REPORTS =
+        listOf(
+            "Sarkaria Commission (1983): Centre-State relations", "Punchhi Commission (2007): Centre-State relations", "Second ARC: Ethics in governance, e-governance",
+            "Mandal Commission (1979): OBC reservation", "Kothari Commission (1964): Education", "Swaminathan Commission: Farmers",
+            "Shah Commission: Emergency excesses", "Balwant Rai Mehta (1957): Panchayati Raj", "Ashok Mehta Committee (1977): Panchayati Raj", "Vohra Committee: Crime-politics nexus",
+        )
+    private val CADAY =
+        listOf(
+            "Read 1 newspaper (Hindu / Indian Express)", "Read 1 editorial and note its stand", "Make or revise 10 CA notes", "Attempt today's CA quiz",
+            "Link 2 current items to static syllabus", "Revise yesterday's CA in 10 minutes",
         )
     private val ESSAY =
         listOf(
@@ -202,7 +240,7 @@ object Toolkit {
     }
 
     // ---------------- top 3 ----------------
-    private fun topDialog(c: android.content.Context) {
+    fun topDialog(c: android.content.Context) {
         val box = c.vbox()
         fun fill() {
             box.removeAllViews()
@@ -307,6 +345,117 @@ object Toolkit {
         Dlg.view(c, "Prelims day checklist", box)
     }
 
+    // ---------------- extra tools ----------------
+    fun caDialog(c: android.content.Context) {
+        val box = c.vbox()
+        val key = "tk_ca_" + today()
+        fun done() = Store.s(key).split("\u001f").filter { it.isNotEmpty() }.toMutableSet()
+        fun fill() {
+            box.removeAllViews()
+            val d = done()
+            CADAY.forEachIndexed { i, t ->
+                val ok = i.toString() in d
+                box.addView(
+                    row(c, if (ok) "checkc" else "target", t, if (ok) "Done" else "Tap when done", if (ok) T.sage else T.amber) {
+                        val x = done()
+                        if (!x.add(i.toString())) x.remove(i.toString())
+                        Store.put(key, x.joinToString("\u001f"))
+                        fill()
+                    },
+                    lp(-1, -2, 6),
+                )
+            }
+            box.addView(c.text("${done().size} of ${CADAY.size} done today", 11f, 0, T.text3), lp(-1, -2, 10))
+        }
+        fill()
+        Dlg.view(c, "Current-affairs checklist", box)
+    }
+
+    fun flashDialog(c: android.content.Context) {
+        val cards = Store.rows("tk_log").filter { it.optString("kind") == "fc" && it.optString("text").contains("|") }
+        if (cards.isEmpty()) {
+            c.toast("Add cards first: Flashcards (question | answer)")
+            logDialog(c, "fc", "Flashcards (question | answer)", "Write like:  Article 21 | Right to life and personal liberty")
+            return
+        }
+        var i = (System.currentTimeMillis() / 1000 % cards.size).toInt()
+        val q = c.text("", 16f, 2, T.text)
+        val a = c.text("", 14f, 0, T.sage)
+        val box = c.vbox()
+        fun show() {
+            val t = cards[i].optString("text")
+            q.text = t.substringBefore("|").trim()
+            a.text = ""
+            a.tag = t.substringAfter("|").trim()
+        }
+        show()
+        box.addView(q)
+        box.addView(a, lp(-1, -2, 10))
+        val r = c.hbox()
+        r.addView(c.pill("Show answer", "eye", true, T.accent) { a.text = a.tag as String }, lpm(-2, -2, 0, 0, 8, 0))
+        r.addView(
+            c.pill("Next", "refresh", false) {
+                i = (i + 1) % cards.size
+                show()
+            },
+        )
+        box.addView(r, lp(-1, -2, 14))
+        box.addView(
+            c.pill("I reviewed these", "check", false, T.sage) {
+                Store.put(ck("flash", today()), count("flash") + 1)
+                c.toast("Counted")
+            },
+            lp(-2, -2, 10),
+        )
+        Dlg.view(c, "Flashcard review (${cards.size} cards)", box)
+    }
+
+    fun streakBoard(c: android.content.Context) {
+        val box = c.vbox()
+        box.addView(c.text("Study streak: ${Repo.streak()} days", 15f, 2, T.text))
+        COUNTERS.forEach { (id, title, _) -> box.addView(row(c, "chart", title, "Today ${count(id)}  -  streak ${streak(id)} days", T.sage) { }, lp(-1, -2, 6)) }
+        Dlg.view(c, "Streak board", box)
+    }
+
+    fun pointsDialog(c: android.content.Context) {
+        val d = today()
+        val items = COUNTERS.map { (id, n, _) -> Triple(n, count(id, d), 10) }
+        val mins = Repo.byDaySubject(listOf(d)).firstOrNull()?.values?.sum() ?: 0
+        val total = items.sumOf { it.second * it.third } + mins / 6
+        val box = c.vbox()
+        box.addView(c.text("$total points today", 20f, 3, T.accent))
+        box.addView(c.text("10 points per counter tap, 1 point per 6 study minutes ($mins min)", 11f, 0, T.text3), lp(-1, -2, 4))
+        items.filter { it.second > 0 }.forEach { box.addView(c.text("${it.first}: ${it.second} x ${it.third}", 13f, 0, T.text), lp(-1, -2, 6)) }
+        val lvl = when { total >= 300 -> "Topper mode"; total >= 150 -> "Strong day"; total >= 60 -> "Good start"; else -> "Warm up" }
+        box.addView(c.text(lvl, 14f, 2, T.sage), lp(-1, -2, 12))
+        Store.put("tk_best", maxOf(Store.i("tk_best", 0), total))
+        box.addView(c.text("Best day so far: ${Store.i("tk_best", 0)}", 12f, 0, T.text3), lp(-1, -2, 4))
+        Dlg.view(c, "Daily score", box)
+    }
+
+    fun clipSave(c: android.content.Context) {
+        val cm = c.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+        val t = try { cm.primaryClip?.getItemAt(0)?.coerceToText(c)?.toString() ?: "" } catch (e: Exception) { "" }
+        if (t.isBlank()) {
+            c.toast("Clipboard is empty")
+            return
+        }
+        Store.add("tk_log", obj("kind" to "clip", "at" to System.currentTimeMillis(), "text" to t.take(2000)))
+        c.toast("Saved to Saved from clipboard")
+    }
+
+    fun exportAll(c: android.content.Context) {
+        val sb = StringBuilder("Mission 2027 - my logs\n")
+        LOGS.forEach { (kind, title, _) ->
+            val rows = Store.rows("tk_log").filter { it.optString("kind") == kind }.sortedBy { it.optLong("at") }
+            if (rows.isNotEmpty()) {
+                sb.append("\n## $title\n")
+                rows.forEach { sb.append("- ${Repo.dayOf(it.optLong("at"))}: ${it.optString("text")}\n") }
+            }
+        }
+        c.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, sb.toString()), "Share logs").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    }
+
     // ---------------- generators ----------------
     private fun generator(c: android.content.Context, title: String, list: List<String>, label: String) {
         var i = (today().toEpochDay() % list.size).toInt()
@@ -405,7 +554,7 @@ object Toolkit {
     }
 
     // ---------------- weekly report ----------------
-    private fun reportDialog(c: android.content.Context) {
+    fun reportDialog(c: android.content.Context) {
         val days = (6 downTo 0).map { today().minusDays(it.toLong()) }
         val per = Repo.byDaySubject(days)
         val total = per.sumOf { it.values.sum() }
@@ -472,6 +621,16 @@ object Toolkit {
         add("sparkle", "Ethics case", "GS4 practice", T.plum) { generator(c, "Ethics case", ETHICS, "Write stakeholders, values, options, final decision") }
         add("sparkle", "Philosophy thinker", "Optional revision", T.plum) { generator(c, "Philosophy thinker", THINKERS, "Recall in 3 lines, then check") }
         add("sparkle", "Thought for today", "Motivation", T.plum) { generator(c, "Thought for today", QUOTES, "") }
+        add("sparkle", "Map of the day", "Locate it on a map", T.plum) { generator(c, "Map of the day", MAPS, "Find it in the atlas, then close your eyes and trace it") }
+        add("sparkle", "Prelims fact", "One high-yield fact", T.plum) { generator(c, "Prelims fact", FACTS, "Say it aloud, then make one MCQ from it") }
+        add("sparkle", "Committee or report", "Static polity and governance", T.plum) { generator(c, "Committee or report", REPORTS, "Recall year, chair and recommendation") }
+        head("MORE TOOLS")
+        add("checkc", "Current-affairs checklist", "Daily 6-step routine", T.sage) { caDialog(c) }
+        add("note", "Flashcard review", "${Store.rows("tk_log").count { it.optString("kind") == "fc" }} cards", T.accent) { flashDialog(c) }
+        add("chart", "Streak board", "Every counter and its streak", T.sage) { streakBoard(c) }
+        add("trend", "Daily score", "Points for today's work", T.amber) { pointsDialog(c) }
+        add("link", "Save clipboard to notes", "Keeps copied text from any app", T.clay) { clipSave(c) }
+        add("up", "Share all my logs", "Export every log as text", T.slate) { exportAll(c) }
         Dlg.view(c, "Study toolkit", box)
     }
 }
