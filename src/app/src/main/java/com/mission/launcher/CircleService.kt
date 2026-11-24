@@ -61,6 +61,11 @@ class CircleService : AccessibilityService() {
 
         const val TAG = "UPSC Prelims 2027"
         const val GEMINI = "com.google.android.apps.bard"
+        val GEMINI_PACKAGES =
+            listOf(
+                GEMINI,
+                "com.google.android.apps.googleassistant",
+            )
 
         /** Prompt that travels with every circled image (editable in Settings > Circle to Search). */
         fun geminiPrompt(): String {
@@ -333,9 +338,11 @@ class CircleService : AccessibilityService() {
         } catch (e: Exception) {
         }
         val i =
-            intentFor(u).setPackage(GEMINI).putExtra(Intent.EXTRA_TEXT, prompt).putExtra(Intent.EXTRA_SUBJECT, TAG)
-                .addFlags(Intent.FLAG_ACTIVITY_MULTIPLE_TASK or Intent.FLAG_ACTIVITY_NEW_TASK)
-        if (packageManager.queryIntentActivities(i, 0).isEmpty()) return false
+            GEMINI_PACKAGES.asSequence().map { pkg ->
+                intentFor(u).setPackage(pkg).putExtra(Intent.EXTRA_TEXT, prompt).putExtra(Intent.EXTRA_SUBJECT, TAG)
+                    .addFlags(Intent.FLAG_ACTIVITY_MULTIPLE_TASK or Intent.FLAG_ACTIVITY_NEW_TASK)
+                    .addFlags(if (Store.b("circle_float", true)) Intent.FLAG_ACTIVITY_LAUNCH_ADJACENT else 0)
+            }.firstOrNull { packageManager.queryIntentActivities(it, 0).isNotEmpty() } ?: return false
         return try {
             val dm = resources.displayMetrics
             val wf = Store.i("circle_w", 42).coerceIn(30, 70) / 100f
@@ -375,12 +382,13 @@ class CircleService : AccessibilityService() {
             try {
                 val dm = resources.displayMetrics
                 for (w in windows) {
-                    if (w.root?.packageName != GEMINI) continue
+                    val packageName = w.root?.packageName ?: continue
+                    if (packageName !in GEMINI_PACKAGES) continue
                     val r = Rect()
                     w.getBoundsInScreen(r)
                     if (r.width().toLong() * r.height() > dm.widthPixels.toLong() * dm.heightPixels * 0.8) {
                         Store.put("circle_float_hint", true)
-                        toast("Gemini opened full screen. Developer options > turn on Enable freeform windows and Force activities to be resizable")
+                        toast("Gemini opened full screen. On this device, enable freeform windows in Developer options for a floating result.")
                     }
                 }
             } catch (e: Exception) {
@@ -392,12 +400,12 @@ class CircleService : AccessibilityService() {
         try {
             for (w in windows) {
                 val r = w.root ?: continue
-                if (r.packageName == GEMINI) return r
+                if (r.packageName in GEMINI_PACKAGES) return r
             }
         } catch (e: Exception) {
         }
         return try {
-            rootInActiveWindow?.takeIf { it.packageName == GEMINI }
+            rootInActiveWindow?.takeIf { it.packageName in GEMINI_PACKAGES }
         } catch (e: Exception) {
             null
         }

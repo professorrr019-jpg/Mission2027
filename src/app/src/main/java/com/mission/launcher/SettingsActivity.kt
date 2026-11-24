@@ -1068,6 +1068,13 @@ class SettingsActivity : Activity() {
             sw("Auto-hiding left edge handle", "Tap to open the app drawer; hidden after inactivity", "edge_handle", false),
             sw("Lock home layout", "Prevent accidental add, remove and move actions", "lock_home_layout", false),
             sw("Launcher haptics", "Use light confirmation feedback for launcher actions", "launcher_haptics", true),
+            choice(
+                "Haptic character",
+                "launcher_haptic_style",
+                "crisp",
+                listOf("soft" to "Soft (iOS-like light)", "crisp" to "Crisp (precise touch)",
+                ),
+            ),
             sw("Reduced motion", "Disable large pager and interface animations", "reduce_motion", false),
             sw("Two-finger quick capture", "Pinch with two fingers on home to open Quick Capture", "two_finger_capture", true),
             choice(
@@ -1082,7 +1089,7 @@ class SettingsActivity : Activity() {
                     "chat" to "Open Mission AI",
                 ),
             ),
-            num("Bottom swipe sensitivity", "gesture_sensitivity", 130, 70, 220, "px", "Smaller value opens the action with a shorter swipe"),
+            num("Bottom swipe sensitivity", "gesture_sensitivity", 130, 70, 220, "dp", "Smaller value opens the action with a shorter swipe"),
         )
         note(
             "New installs start with empty home pages. Tap the sliders icon on the home header or long-press the page dots to choose your cards. Pins are set under Apps and dock.",

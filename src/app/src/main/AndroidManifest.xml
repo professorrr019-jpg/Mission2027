@@ -11,6 +11,7 @@
         <package android:name="com.google.android.youtube"/>
         <package android:name="com.google.android.googlequicksearchbox"/>
         <package android:name="com.google.android.apps.bard"/>
+        <package android:name="com.google.android.apps.googleassistant"/>
         <package android:name="com.google.android.calendar"/>
         <provider android:authorities="com.android.calendar"/>
     </queries>

@@ -613,7 +613,7 @@ class MainActivity : Activity(), Host {
 
                     override fun onLongPress(e: MotionEvent) {
                         if (!editing) {
-                            sv.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+                            LauncherHaptics.confirm(sv)
                             Gestures.run(this@MainActivity, Store.s("g_long", "edit"))
                         }
                     }

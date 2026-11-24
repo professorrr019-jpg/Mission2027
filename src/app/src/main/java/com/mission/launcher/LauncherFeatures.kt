@@ -152,14 +152,44 @@ object SearchHistory {
 }
 
 object LauncherHaptics {
+    private fun mode(): String =
+        if (!Store.b("launcher_haptics", true)) "off"
+        else Store.s("launcher_haptic_style", "crisp").lowercase()
+
     fun tap(view: android.view.View) {
-        if (!Store.b("launcher_haptics", true)) return
-        view.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
+        if (!view.isHapticFeedbackEnabled) return
+        val mode = mode()
+        if (mode == "off") return
+        val effect =
+            if (mode == "soft") android.view.HapticFeedbackConstants.CLOCK_TICK
+            else android.view.HapticFeedbackConstants.KEYBOARD_TAP
+        view.performHapticFeedback(effect)
     }
 
     fun confirm(view: android.view.View) {
-        if (!Store.b("launcher_haptics", true)) return
-        view.performHapticFeedback(android.view.HapticFeedbackConstants.CONFIRM)
+        if (!view.isHapticFeedbackEnabled) return
+        val mode = mode()
+        if (mode == "off") return
+        val effect =
+            if (mode == "soft") android.view.HapticFeedbackConstants.CONTEXT_CLICK
+            else android.view.HapticFeedbackConstants.CONFIRM
+        view.performHapticFeedback(effect)
+    }
+
+    fun select(view: android.view.View) {
+        if (!view.isHapticFeedbackEnabled) return
+        val mode = mode()
+        if (mode == "off") return
+        val effect =
+            if (mode == "soft") android.view.HapticFeedbackConstants.CLOCK_TICK
+            else android.view.HapticFeedbackConstants.CONFIRM
+        view.performHapticFeedback(effect)
+    }
+
+    fun reject(view: android.view.View) {
+        if (!view.isHapticFeedbackEnabled) return
+        if (mode() == "off") return
+        view.performHapticFeedback(android.view.HapticFeedbackConstants.REJECT)
     }
 }
 

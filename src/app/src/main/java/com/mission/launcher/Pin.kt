@@ -3,7 +3,6 @@ package com.mission.launcher
 import android.content.Context
 import android.os.CancellationSignal
 import android.view.Gravity
-import android.view.HapticFeedbackConstants
 import android.view.View
 import android.widget.FrameLayout
 import android.widget.LinearLayout
@@ -133,7 +132,7 @@ class PinPad(
         }
         if (k == "bio" && onBio == null) return fl
         fl.tap(false) {
-            fl.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+            LauncherHaptics.tap(fl)
             when (k) {
                 "del" -> if (buf.isNotEmpty()) buf = buf.dropLast(1)
                 "bio" -> onBio?.invoke()
@@ -155,7 +154,7 @@ class PinPad(
         buf = ""
         drawDots()
         msg.text = m
-        performHapticFeedback(HapticFeedbackConstants.REJECT)
+        LauncherHaptics.reject(this)
         animate().translationX(14f).setDuration(60).withEndAction { animate().translationX(0f).setDuration(80).start() }.start()
     }
 

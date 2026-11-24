@@ -129,7 +129,7 @@ fun View.tap(
         false
     }
     setOnClickListener {
-        if (haptic) performHapticFeedback(HapticFeedbackConstants.CONFIRM)
+        if (haptic) LauncherHaptics.confirm(this)
         f()
     }
 }
@@ -348,7 +348,7 @@ class HBars(c: Context, var rows: List<Row>, val rowDp: Int = 30) : View(c) {
         if (e.actionMasked == MotionEvent.ACTION_UP) {
             val i = (e.y / T.dpf(rowDp.toFloat())).toInt()
             rows.getOrNull(i)?.let {
-                performHapticFeedback(HapticFeedbackConstants.CONFIRM)
+                LauncherHaptics.select(this)
                 onRow?.invoke(it)
             }
         }
@@ -576,7 +576,7 @@ class Donut3D(c: Context) : View(c) {
             if (ang <= acc) {
                 selected = if (selected == i) -1 else i
                 invalidate()
-                performHapticFeedback(HapticFeedbackConstants.CONFIRM)
+                LauncherHaptics.select(this)
                 onPick?.invoke(selected)
                 break
             }
