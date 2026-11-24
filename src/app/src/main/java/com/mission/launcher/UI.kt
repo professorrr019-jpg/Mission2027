@@ -22,7 +22,7 @@ fun Context.text(
 ): TextView =
     TextView(this).apply {
         text = s
-        setTextSize(TypedValueSp, sp * T.ts)
+        setTextSize(TypedValueSp, (sp * T.ts * T.ct).coerceAtLeast(if (T.ct < 1f) 6.5f else 0f))
         setTextColor(color)
         typeface = T.font(weight)
         includeFontPadding = false
@@ -267,15 +267,47 @@ class Row(val label: String, val value: Float, val color: Int, val right: String
 
 /** Horizontal colour-coded progress rows (value 0..1). */
 class HBars(c: Context, var rows: List<Row>, val rowDp: Int = 30) : View(c) {
+
+    private val k0 = T.ck
+    private val t0 = T.ct
+
+    override fun onMeasure(
+        wSpec: Int,
+        hSpec: Int,
+    ) {
+        val a = T.ck
+        val b = T.ct
+        T.ck = k0
+        T.ct = t0
+        try {
+            measure0(wSpec, hSpec)
+        } finally {
+            T.ck = a
+            T.ct = b
+        }
+    }
+
+    override fun onDraw(cv: Canvas) {
+        val a = T.ck
+        val b = T.ct
+        T.ck = k0
+        T.ct = t0
+        try {
+            draw0(cv)
+        } finally {
+            T.ck = a
+            T.ct = b
+        }
+    }
     private val p = Paint(Paint.ANTI_ALIAS_FLAG)
     var onRow: ((Row) -> Unit)? = null
 
-    override fun onMeasure(
+    private fun measure0(
         w: Int,
         h: Int,
     ) = setMeasuredDimension(MeasureSpec.getSize(w), max(1, rows.size) * T.dp(rowDp))
 
-    override fun onDraw(cv: Canvas) {
+    private fun draw0(cv: Canvas) {
         val rh = T.dpf(rowDp.toFloat())
         val lw = width * 0.40f
         val vw = T.dpf(54f)
@@ -326,6 +358,22 @@ class HBars(c: Context, var rows: List<Row>, val rowDp: Int = 30) : View(c) {
 
 /** Circular progress ring with centre text. */
 class Ring(c: Context, var progress: Float, var color: Int, var big: String, var small: String = "", val strokeDp: Int = 9) : View(c) {
+
+    private val k0 = T.ck
+    private val t0 = T.ct
+
+    override fun onDraw(cv: Canvas) {
+        val a = T.ck
+        val b = T.ct
+        T.ck = k0
+        T.ct = t0
+        try {
+            draw0(cv)
+        } finally {
+            T.ck = a
+            T.ct = b
+        }
+    }
     private val p = Paint(Paint.ANTI_ALIAS_FLAG)
     private var anim = 0f
 
@@ -344,7 +392,7 @@ class Ring(c: Context, var progress: Float, var color: Int, var big: String, var
         invalidate()
     }
 
-    override fun onDraw(cv: Canvas) {
+    private fun draw0(cv: Canvas) {
         val sw = T.dpf(strokeDp.toFloat())
         val r = RectF(sw / 2, sw / 2, width - sw / 2, height - sw / 2)
         p.style = Paint.Style.STROKE
@@ -371,6 +419,38 @@ class Ring(c: Context, var progress: Float, var color: Int, var big: String, var
 
 /** Pseudo-3D donut: tilted ellipse with extruded side wall; slices are tappable. */
 class Donut3D(c: Context) : View(c) {
+
+    private val k0 = T.ck
+    private val t0 = T.ct
+
+    override fun onMeasure(
+        wSpec: Int,
+        hSpec: Int,
+    ) {
+        val a = T.ck
+        val b = T.ct
+        T.ck = k0
+        T.ct = t0
+        try {
+            measure0(wSpec, hSpec)
+        } finally {
+            T.ck = a
+            T.ct = b
+        }
+    }
+
+    override fun onDraw(cv: Canvas) {
+        val a = T.ck
+        val b = T.ct
+        T.ck = k0
+        T.ct = t0
+        try {
+            draw0(cv)
+        } finally {
+            T.ck = a
+            T.ct = b
+        }
+    }
     class Slice(val label: String, val value: Float, val color: Int, val prog: Float = 1f, val tag: Any? = null)
 
     var slices: List<Slice> = emptyList()
@@ -383,7 +463,7 @@ class Donut3D(c: Context) : View(c) {
     private val ratio = 0.56f
     private val depth get() = T.dpf(16f)
 
-    override fun onMeasure(
+    private fun measure0(
         w: Int,
         h: Int,
     ) {
@@ -416,7 +496,7 @@ class Donut3D(c: Context) : View(c) {
         return path
     }
 
-    override fun onDraw(cv: Canvas) {
+    private fun draw0(cv: Canvas) {
         val total = slices.sumOf { it.value.toDouble() }.toFloat()
         if (total <= 0f) return
         val g = geom()
@@ -507,15 +587,47 @@ class Donut3D(c: Context) : View(c) {
 
 /** Stacked day columns, colour-coded by subject (study history, 2-D). */
 class StackBars(c: Context, val days: List<String>, val stacks: List<List<Pair<Int, Float>>>, val unit: String = "h") : View(c) {
+
+    private val k0 = T.ck
+    private val t0 = T.ct
+
+    override fun onMeasure(
+        wSpec: Int,
+        hSpec: Int,
+    ) {
+        val a = T.ck
+        val b = T.ct
+        T.ck = k0
+        T.ct = t0
+        try {
+            measure0(wSpec, hSpec)
+        } finally {
+            T.ck = a
+            T.ct = b
+        }
+    }
+
+    override fun onDraw(cv: Canvas) {
+        val a = T.ck
+        val b = T.ct
+        T.ck = k0
+        T.ct = t0
+        try {
+            draw0(cv)
+        } finally {
+            T.ck = a
+            T.ct = b
+        }
+    }
     private val p = Paint(Paint.ANTI_ALIAS_FLAG)
     var heightDp = 150
 
-    override fun onMeasure(
+    private fun measure0(
         w: Int,
         h: Int,
     ) = setMeasuredDimension(MeasureSpec.getSize(w), T.dp(heightDp))
 
-    override fun onDraw(cv: Canvas) {
+    private fun draw0(cv: Canvas) {
         val n = days.size
         if (n == 0) return
         val top = T.dpf(8f)
@@ -561,15 +673,47 @@ class StackBars(c: Context, val days: List<String>, val stacks: List<List<Pair<I
 }
 
 class LineChart(c: Context, val xs: List<String>, val ys: List<Float>, val color: Int, val maxY: Float? = null) : View(c) {
+
+    private val k0 = T.ck
+    private val t0 = T.ct
+
+    override fun onMeasure(
+        wSpec: Int,
+        hSpec: Int,
+    ) {
+        val a = T.ck
+        val b = T.ct
+        T.ck = k0
+        T.ct = t0
+        try {
+            measure0(wSpec, hSpec)
+        } finally {
+            T.ck = a
+            T.ct = b
+        }
+    }
+
+    override fun onDraw(cv: Canvas) {
+        val a = T.ck
+        val b = T.ct
+        T.ck = k0
+        T.ct = t0
+        try {
+            draw0(cv)
+        } finally {
+            T.ck = a
+            T.ct = b
+        }
+    }
     private val p = Paint(Paint.ANTI_ALIAS_FLAG)
     var heightDp = 130
 
-    override fun onMeasure(
+    private fun measure0(
         w: Int,
         h: Int,
     ) = setMeasuredDimension(MeasureSpec.getSize(w), T.dp(heightDp))
 
-    override fun onDraw(cv: Canvas) {
+    private fun draw0(cv: Canvas) {
         if (ys.isEmpty()) return
         val l = T.dpf(4f)
         val r = width - T.dpf(8f)

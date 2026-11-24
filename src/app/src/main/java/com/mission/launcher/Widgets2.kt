@@ -54,17 +54,49 @@ private fun blend(
 
 /** Year x subject grid. Colour = subject colour, strength = number of questions that year. */
 class PyqGrid(c: Context, val years: List<Int>, val data: Map<Int, Map<String, Int>>, val subjects: List<String>) : View(c) {
+
+    private val k0 = T.ck
+    private val t0 = T.ct
+
+    override fun onMeasure(
+        wSpec: Int,
+        hSpec: Int,
+    ) {
+        val a = T.ck
+        val b = T.ct
+        T.ck = k0
+        T.ct = t0
+        try {
+            measure0(wSpec, hSpec)
+        } finally {
+            T.ck = a
+            T.ct = b
+        }
+    }
+
+    override fun onDraw(cv: Canvas) {
+        val a = T.ck
+        val b = T.ct
+        T.ck = k0
+        T.ct = t0
+        try {
+            draw0(cv)
+        } finally {
+            T.ck = a
+            T.ct = b
+        }
+    }
     private val p = Paint(Paint.ANTI_ALIAS_FLAG)
     private val rowH get() = T.dp(22).toFloat()
     private val labelW get() = T.dp(40).toFloat()
     private val maxV = (years.flatMap { y -> subjects.map { s -> data[y]?.get(s) ?: 0 } }.maxOrNull() ?: 1).coerceAtLeast(1)
 
-    override fun onMeasure(
+    private fun measure0(
         w: Int,
         h: Int,
     ) = setMeasuredDimension(MeasureSpec.getSize(w), (rowH * (years.size + 1)).toInt() + T.dp(2))
 
-    override fun onDraw(cv: Canvas) {
+    private fun draw0(cv: Canvas) {
         val cw = (width - labelW) / subjects.size
         p.textAlign = Paint.Align.CENTER
         p.typeface = Typeface.DEFAULT_BOLD
@@ -99,16 +131,48 @@ class PyqGrid(c: Context, val years: List<Int>, val data: Map<Int, Map<String, I
 
 /** GitHub-style study heatmap: columns are weeks (Mon..Sun rows), colour = minutes studied. */
 class StudyHeat(c: Context, val weeks: Int, val minutes: Map<LocalDate, Int>, val goal: Int) : View(c) {
+
+    private val k0 = T.ck
+    private val t0 = T.ct
+
+    override fun onMeasure(
+        wSpec: Int,
+        hSpec: Int,
+    ) {
+        val a = T.ck
+        val b = T.ct
+        T.ck = k0
+        T.ct = t0
+        try {
+            measure0(wSpec, hSpec)
+        } finally {
+            T.ck = a
+            T.ct = b
+        }
+    }
+
+    override fun onDraw(cv: Canvas) {
+        val a = T.ck
+        val b = T.ct
+        T.ck = k0
+        T.ct = t0
+        try {
+            draw0(cv)
+        } finally {
+            T.ck = a
+            T.ct = b
+        }
+    }
     private val p = Paint(Paint.ANTI_ALIAS_FLAG)
     private val cell get() = T.dp(14).toFloat()
     private val gap get() = T.dp(3).toFloat()
 
-    override fun onMeasure(
+    private fun measure0(
         w: Int,
         h: Int,
     ) = setMeasuredDimension(MeasureSpec.getSize(w), ((cell + gap) * 7).toInt() + T.dp(2))
 
-    override fun onDraw(cv: Canvas) {
+    private fun draw0(cv: Canvas) {
         val today = LocalDate.now(ZoneId.of("Asia/Kolkata"))
         val monday = today.minusDays((today.dayOfWeek.value - 1).toLong())
         val first = monday.minusWeeks((weeks - 1).toLong())

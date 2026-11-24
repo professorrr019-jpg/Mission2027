@@ -334,12 +334,17 @@ class CircleService : AccessibilityService() {
         }
         val i =
             intentFor(u).setPackage(GEMINI).putExtra(Intent.EXTRA_TEXT, prompt).putExtra(Intent.EXTRA_SUBJECT, TAG)
-                .addFlags(Intent.FLAG_ACTIVITY_MULTIPLE_TASK or Intent.FLAG_ACTIVITY_NEW_DOCUMENT)
+                .addFlags(Intent.FLAG_ACTIVITY_MULTIPLE_TASK or Intent.FLAG_ACTIVITY_NEW_TASK)
         if (packageManager.queryIntentActivities(i, 0).isEmpty()) return false
         return try {
             val dm = resources.displayMetrics
-            // Small floating window on the right: about 42% wide, 66% tall.
-            val bounds = Rect((dm.widthPixels * 0.55f).toInt(), (dm.heightPixels * 0.14f).toInt(), dm.widthPixels - T.dp(12), (dm.heightPixels * 0.80f).toInt())
+            val wf = Store.i("circle_w", 42).coerceIn(30, 70) / 100f
+            val hf = Store.i("circle_h", 62).coerceIn(40, 90) / 100f
+            val w = (dm.widthPixels * wf).toInt()
+            val h = (dm.heightPixels * hf).toInt()
+            val l = dm.widthPixels - w - T.dp(12)
+            val t = (dm.heightPixels - h) / 2
+            val bounds = Rect(l, t, l + w, t + h)
             val o = ActivityOptions.makeBasic()
             if (Store.b("circle_float", true)) {
                 o.setLaunchBounds(bounds)
@@ -349,7 +354,10 @@ class CircleService : AccessibilityService() {
                 } catch (e: Throwable) {
                 }
             }
-            startActivity(i, o.toBundle())
+            val ob = o.toBundle() ?: Bundle()
+            if (Store.b("circle_float", true)) ob.putInt("android.activity.windowingMode", 5)
+            startActivity(i, ob)
+            checkFloat()
             toast("Sent to Gemini  -  prompt copied if it needs pasting")
             autoSend(0)
             true
@@ -360,28 +368,83 @@ class CircleService : AccessibilityService() {
     }
 
     /** Best effort: once Gemini is in front, press its send button so the search starts without another tap. */
-    private fun autoSend(n: Int) {
-        if (n > 30 || !Store.b("circle_autosend", true)) return
+    /** If Gemini still opened (almost) full screen, tell the user once how to allow freeform windows. */
+    private fun checkFloat() {
+        if (!Store.b("circle_float", true) || Store.b("circle_float_hint", false)) return
         ui.postDelayed({
-            var done = false
             try {
-                val root = rootInActiveWindow
-                if (root != null && root.packageName == GEMINI) {
-                    val ed = findEditor(root, 0)
-                    val cur = ed?.text?.toString() ?: ""
-                    if (ed != null && !cur.contains(TAG)) {
-                        // Gemini drops the shared text when an image comes with it, so the tag + prompt is typed into its box here.
-                        val args = Bundle().putCharSequenceCompat(geminiPrompt())
-                        ed.performAction(AccessibilityNodeInfo.ACTION_FOCUS)
-                        if (!ed.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)) ed.performAction(AccessibilityNodeInfo.ACTION_PASTE)
-                    } else if (ed != null && n > 2) {
-                        done = clickSend(root, 0)
+                val dm = resources.displayMetrics
+                for (w in windows) {
+                    if (w.root?.packageName != GEMINI) continue
+                    val r = Rect()
+                    w.getBoundsInScreen(r)
+                    if (r.width().toLong() * r.height() > dm.widthPixels.toLong() * dm.heightPixels * 0.8) {
+                        Store.put("circle_float_hint", true)
+                        toast("Gemini opened full screen. Developer options > turn on Enable freeform windows and Force activities to be resizable")
                     }
                 }
             } catch (e: Exception) {
             }
+        }, 2200)
+    }
+
+    private fun geminiRoot(): AccessibilityNodeInfo? {
+        try {
+            for (w in windows) {
+                val r = w.root ?: continue
+                if (r.packageName == GEMINI) return r
+            }
+        } catch (e: Exception) {
+        }
+        return try {
+            rootInActiveWindow?.takeIf { it.packageName == GEMINI }
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    private var typedAt = 0
+
+    private fun hasImage(node: AccessibilityNodeInfo, depth: Int): Boolean {
+        if (depth > 16) return false
+        val d = (node.contentDescription?.toString() ?: "").lowercase()
+        if (d.contains("image") || d.contains("photo") || d.contains("attachment") || d.contains("तस्वीर")) return true
+        if ((node.className?.toString() ?: "").contains("ImageView") && node.isVisibleToUser && node.parent?.className?.toString()?.contains("EditText") != true && depth > 3) return true
+        for (k in 0 until node.childCount) {
+            val ch = node.getChild(k) ?: continue
+            if (hasImage(ch, depth + 1)) return true
+        }
+        return false
+    }
+
+    private fun autoSend(n: Int) {
+        if (n == 0) typedAt = -1
+        if (n > 40 || !Store.b("circle_autosend", true)) return
+        ui.postDelayed({
+            var done = false
+            try {
+                val root = geminiRoot()
+                if (root != null) {
+                    val ed = findEditor(root, 0)
+                    val cur = ed?.text?.toString() ?: ""
+                    if (ed != null && !cur.contains(TAG)) {
+                        // Gemini drops shared text when an image comes with it, so the tag + prompt is typed into its box here.
+                        ed.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                        ed.performAction(AccessibilityNodeInfo.ACTION_FOCUS)
+                        val args = Bundle().putCharSequenceCompat(geminiPrompt())
+                        if (!ed.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)) ed.performAction(AccessibilityNodeInfo.ACTION_PASTE)
+                        typedAt = n
+                    } else if (ed != null && cur.contains(TAG)) {
+                        if (typedAt < 0) typedAt = n
+                        // send once the image preview is there, or after a short wait
+                        if (hasImage(root, 0) || n - typedAt >= 5) done = clickSend(root, 0)
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("circle-auto", e)
+            }
             if (!done) autoSend(n + 1)
-        }, 800)
+        }, 600)
     }
 
     private fun Bundle.putCharSequenceCompat(t: CharSequence): Bundle {
@@ -409,7 +472,7 @@ class CircleService : AccessibilityService() {
         if (depth > 14) return false
         val d = (node.contentDescription?.toString() ?: "").lowercase()
         val id = (node.viewIdResourceName ?: "").lowercase()
-        if (node.isEnabled && (d == "send" || d.startsWith("send ") || d.contains("submit") || id.contains("send"))) {
+        if (node.isEnabled && (d == "send" || d.startsWith("send ") || d.contains("submit") || d.contains("भेजें") || id.contains("send"))) {
             var t: AccessibilityNodeInfo? = node
             while (t != null && !t.isClickable) t = t.parent
             if (t != null && t.performAction(AccessibilityNodeInfo.ACTION_CLICK)) return true

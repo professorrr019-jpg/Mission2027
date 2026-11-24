@@ -874,6 +874,7 @@ class SettingsActivity : Activity() {
                 )
                 finish()
             },
+            sw("Hide bottom navigation bar", "Removes the gesture pill on home. Swipe up from the bottom edge to show it briefly", "hide_nav", true),
             sw("Auto-hiding left edge handle", "Tap to open the app drawer; hidden after inactivity", "edge_handle", false),
         )
         note(
@@ -899,6 +900,28 @@ class SettingsActivity : Activity() {
                 multiPick("Study apps", "study_apps")
             },
         )
+        label("Memory cleaner")
+        group(
+            sw("Auto clear unused apps", "Every 30 minutes stops background apps you have not used (needs Usage access)", "clean_auto", true) { Cleaner.schedule(this@SettingsActivity) },
+            num("Idle minutes", "clean_idle", 30, 10, 240, "min", "An app is cleared only if unused for this long"),
+            sw("Show a message after cleaning", null, "clean_toast", false),
+            action("refresh", T.teal, "Clean now", "Last run cleared ${Store.i("clean_count", 0)} apps") {
+                if (!Usage.granted(this@SettingsActivity)) {
+                    toast("Grant usage access first")
+                    Usage.openSettings(this@SettingsActivity)
+                } else {
+                    Thread {
+                        val n = Cleaner.run(this@SettingsActivity)
+                        runOnUiThread {
+                            toast("Cleared $n idle apps")
+                            redraw()
+                        }
+                    }.start()
+                }
+            },
+            action("shield", T.sage, "Never clear these", "${Store.stringList("clean_keep").size} apps kept") { multiPick("Keep running", "clean_keep") },
+        )
+        note("Only background apps are stopped. Android or HyperOS may restart some of them. Telegram, WhatsApp, Flexcil, Gemini, music apps, keyboard and dialer are always kept.")
         note("Recent apps are never shown on the home screen.")
     }
 
@@ -942,7 +965,7 @@ class SettingsActivity : Activity() {
                 88,
                 "dp",
             ),
-            num("Pinned app icon size", "dock_icon", 30, 20, 72, "dp"), sw("Drawer app names", null, "drawer_labels", true),
+            num("Pinned app icon size", "dock_icon", 15, 10, 72, "dp"), sw("Drawer app names", null, "drawer_labels", true),
             slider("Text size", "text_scale", 100, 130, min = 80) {
                 T.init(c.applicationContext)
                 recreate()
@@ -1646,6 +1669,8 @@ class SettingsActivity : Activity() {
                 listOf("gemini" to "Gemini app (floating, UPSC Prelims 2027 tag)", "ask" to "Ask me every time (Gemini, Lens, share)"),
             ),
             sw("Floating Gemini window", "Small window on the right so your notes stay visible", "circle_float", true),
+            num("Floating window width", "circle_w", 42, 30, 70, "%"),
+            num("Floating window height", "circle_h", 62, 40, 90, "%"),
             sw("Press Send automatically", "Needs the accessibility service; Gemini starts searching at once", "circle_autosend", true),
             sw("Add 'UPSC Prelims 2027' tag", "Sent with every circled image so answers are exam focused", "circle_tag", true),
             value("Prompt sent with the image", null, CircleService.geminiPrompt().take(60) + "...") {

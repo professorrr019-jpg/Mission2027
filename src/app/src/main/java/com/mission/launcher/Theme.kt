@@ -55,9 +55,17 @@ object T {
     /** weight 0 regular, 1 medium, 2 semibold, 3 bold */
     fun font(weight: Int): Typeface = tfs[weight.coerceIn(0, 3)]
 
-    fun dp(v: Int): Int = (v * dens * us + 0.5f).toInt()
+    /** Size factors used only while a home card is being built: dp x ck, text x ct (half-size cards). */
+    @Volatile var ck = 1f
 
-    fun dpf(v: Float): Float = v * dens * us
+    @Volatile var ct = 1f
+
+    fun dp(v: Int): Int {
+        val r = (v * dens * us * ck + 0.5f).toInt()
+        return if (ck < 1f && v > 0 && r < 1) 1 else r
+    }
+
+    fun dpf(v: Float): Float = v * dens * us * ck
 
     fun dpFixed(v: Int): Int = (v * dens + 0.5f).toInt()
 

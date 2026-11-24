@@ -194,6 +194,7 @@ class MainActivity : Activity(), Host {
         Boot.ensure(this)
         Migrate.run(this)
         systemBars()
+        hideNav()
         widgetHost = AppWidgetHost(this, 1024)
         root = FrameLayout(this)
         setContentView(root)
@@ -216,9 +217,9 @@ class MainActivity : Activity(), Host {
         dock =
             LinearLayout(this).apply {
                 gravity = Gravity.CENTER
-                background = T.round(T.card, 30)
-                T.elevate(this, 4, 30)
-                padDp(14, 10, 14, 10)
+                background = T.round(T.card, 18)
+                T.elevate(this, 4, 18)
+                padDp(8, 5, 8, 5)
             }
         content.addView(dock, FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL))
         updateEdgeHandle()
@@ -273,6 +274,7 @@ class MainActivity : Activity(), Host {
         Backdrop.ctx = applicationContext
         Targets.schedule(this)
         Auto.schedule(this)
+        Cleaner.schedule(this)
         window.decorView.post { handleOpen(intent) }
         Wallpaper.scheduleNext(this)
         if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
@@ -329,8 +331,29 @@ class MainActivity : Activity(), Host {
         Store.flushNow()
     }
 
+    /** Hides the system navigation bar / gesture pill on home; a swipe from the bottom edge shows it briefly. */
+    private fun hideNav() {
+        try {
+            val ic = window.insetsController ?: return
+            if (Store.b("hide_nav", true)) {
+                ic.systemBarsBehavior = android.view.WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                ic.hide(WindowInsets.Type.navigationBars())
+            } else {
+                ic.show(WindowInsets.Type.navigationBars())
+            }
+        } catch (e: Throwable) {
+            Log.e("hide-nav", e)
+        }
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) hideNav()
+    }
+
     override fun onResume() {
         super.onResume()
+        hideNav()
         val was = T.dark
         T.init(applicationContext)
         if (was != T.dark) {
@@ -392,18 +415,18 @@ class MainActivity : Activity(), Host {
 
     // ---------- layout ----------
     private fun applyInsets() {
-        val dockH = if (dock.height > 0) dock.height else T.dp(Store.i("dock_icon", 30).coerceIn(20, 72) + 34)
-        (dots.layoutParams as FrameLayout.LayoutParams).bottomMargin = botInset + T.dp(14) + dockH + T.dp(8)
-        (dock.layoutParams as FrameLayout.LayoutParams).bottomMargin = botInset + T.dp(14)
+        val dockH = if (dock.height > 0) dock.height else T.dp(Store.i("dock_icon", 15).coerceIn(10, 72) + 18)
+        (dots.layoutParams as FrameLayout.LayoutParams).bottomMargin = botInset + T.dp(8) + dockH + T.dp(8)
+        (dock.layoutParams as FrameLayout.LayoutParams).bottomMargin = botInset + T.dp(8)
         dock.post {
-            val want = botInset + T.dp(14) + dock.height + T.dp(8)
+            val want = botInset + T.dp(8) + dock.height + T.dp(8)
             val lp = dots.layoutParams as FrameLayout.LayoutParams
             if (dock.height > 0 && lp.bottomMargin != want) {
                 lp.bottomMargin = want
                 dots.requestLayout()
             }
         }
-        (editBar.layoutParams as FrameLayout.LayoutParams).bottomMargin = botInset + T.dp(14)
+        (editBar.layoutParams as FrameLayout.LayoutParams).bottomMargin = botInset + T.dp(8)
         for (i in 0 until pager.childCount) (pager.getChildAt(i) as? ScrollView)?.setPadding(0, topInset, 0, 0)
         dots.requestLayout()
         dock.requestLayout()
@@ -441,7 +464,7 @@ class MainActivity : Activity(), Host {
         attachGestures(sv)
         val col = vbox()
         val wide = resources.displayMetrics.widthPixels / resources.displayMetrics.density > 700
-        col.setPadding(T.dp(if (wide) 24 else 14), T.dp(8), T.dp(if (wide) 24 else 14), T.dp(maxOf(150, Store.i("dock_icon", 30).coerceIn(20, 72) + 34 + 14 + 48)) + botInset)
+        col.setPadding(T.dp(if (wide) 24 else 14), T.dp(8), T.dp(if (wide) 24 else 14), T.dp(maxOf(60, Store.i("dock_icon", 15).coerceIn(10, 72) + 18 + 14 + 24)) + botInset)
         val ids = if (Store.b("safe_mode", false)) emptyList() else HomeLayout.cards(p)
         if (editing) {
             col.addView(text(p.optString("name") + "  (page ${i + 1}/${layout.length()})", 13f, 3, T.text2).apply { padDp(6, 6, 6, 6) })
@@ -490,7 +513,17 @@ class MainActivity : Activity(), Host {
         id: String,
         ids: List<String>,
     ) {
-        val v = cardView(id) ?: return
+        val small = Store.b("compact_cards", true)
+        val v =
+            try {
+                val z = when (Store.s("csz_$id", "m")) { "s" -> 0.8f; "l" -> 1.3f; else -> 1f }
+                T.ck = (if (small) 0.5f else 0.65f) * z
+                T.ct = (if (small) 0.65f else 0.78f) * (if (z < 1f) 0.9f else if (z > 1f) 1.15f else 1f)
+                cardView(id)
+            } finally {
+                T.ck = 1f
+                T.ct = 1f
+            } ?: return
         val wrap = vbox()
         if (editing) {
             val idx = ids.indexOf(id)
@@ -511,6 +544,16 @@ class MainActivity : Activity(), Host {
                     bar.addView(iconBtn("pencil", T.text2, 34) { resizeWidget(wid) })
                 }
             } else {
+                val cur = Store.s("csz_$id", "m")
+                bar.addView(
+                    text(cur.uppercase(), 12.5f, 3, T.accent).apply {
+                        padDp(10, 6, 10, 6)
+                        setOnClickListener {
+                            Store.put("csz_$id", when (cur) { "s" -> "m"; "m" -> "l"; else -> "s" })
+                            rebuild()
+                        }
+                    },
+                )
                 bar.addView(iconBtn("close", T.danger, 34) { removeCard(page, idx) })
             }
             wrap.addView(bar, lpm(-1, -2, 0, 0, 0, 6))
@@ -967,7 +1010,7 @@ class MainActivity : Activity(), Host {
     private fun buildDock() {
         dock.removeAllViews()
         val pins = Apps.pins().mapNotNull { Apps.byPkg(it) }.take(5)
-        val pinSize = T.dp(Store.i("dock_icon", 30).coerceIn(20, 72))
+        val pinSize = T.dp(Store.i("dock_icon", 15).coerceIn(10, 72))
         pins.forEach { e ->
             dock.addView(
                 ImageView(this).apply {
@@ -989,17 +1032,17 @@ class MainActivity : Activity(), Host {
                         true
                     }
                 },
-                lpm(pinSize, pinSize, 7, 0, 7, 0),
+                lpm(pinSize, pinSize, 4, 0, 4, 0),
             )
         }
         if (pins.isEmpty()) dock.addView(text("Pin apps in Settings > Apps", 12f, 1, T.text3).apply { padDp(10, 0, 10, 0) })
         dock.addView(
             FrameLayout(this).apply {
                 background = T.round(T.inset, 16)
-                addView(icon("grid", T.text, 24, 1.8f), FrameLayout.LayoutParams(T.dp(24), T.dp(24), Gravity.CENTER))
+                addView(icon("grid", T.text, 14, 1.8f), FrameLayout.LayoutParams(T.dp(14), T.dp(14), Gravity.CENTER))
                 tap { openDrawer() }
             },
-            lpm(T.dp(52), T.dp(52), 7, 0, 7, 0),
+            lpm(T.dp(28), T.dp(28), 4, 0, 4, 0),
         )
         var y0 = 0f
         dock.setOnTouchListener {

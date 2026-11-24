@@ -154,6 +154,16 @@ object Sched {
         at: Long,
     ) = setAt(c, at, pi(c, 42, AutoReceiver::class.java, "auto.tick"))
 
+    fun clean(
+        c: Context,
+        at: Long,
+    ) = setAt(c, at, pi(c, 43, CleanReceiver::class.java, "clean.tick"))
+
+    fun cancelClean(c: Context) {
+        val am = c.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        am.cancel(pi(c, 43, CleanReceiver::class.java, "clean.tick"))
+    }
+
     fun cancelAuto(c: Context) {
         val am = c.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         am.cancel(pi(c, 42, AutoReceiver::class.java, "auto.tick"))
@@ -311,6 +321,7 @@ class TickReceiver : BroadcastReceiver() {
                 Water.arm(c)
                 Targets.schedule(c)
                 Auto.fire(c)
+                if (Store.l("clean_next", 0L) <= System.currentTimeMillis() - 5 * 60000L) Cleaner.fire(c)
                 Updater.backgroundCheck(c)
                 try {
                     if (Zite.hasKey() && Zite.stale() && c.online()) Zite.sync(c)
@@ -374,7 +385,7 @@ class BootReceiver : BroadcastReceiver() {
         }
         Boot.ensure(c)
         Sched.hourly(c)
-        Water.arm(c); Targets.schedule(c); Auto.schedule(c)
+        Water.arm(c); Targets.schedule(c); Auto.schedule(c); Cleaner.schedule(c)
         Wallpaper.scheduleNext(c)
         if (TimerState.active()) TimerService.start(c)
     }

@@ -17,6 +17,10 @@ object Migrate {
                 check(p.edit().remove("gkey").commit()) { "Legacy credential could not be removed" }
             }
         }
+        if (!Store.b("size_v2")) {
+            if (Store.i("dock_icon", 30) == 30) Store.put("dock_icon", 15)
+            Store.put("size_v2", true)
+        }
         if (Store.b("migrated_v1")) return
         if (p.all.isEmpty()) {
             Store.put("migrated_v1", true)
