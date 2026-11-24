@@ -76,6 +76,7 @@
         <activity android:name=".VoiceNoteActivity" android:exported="false" android:theme="@style/AppTheme" android:resizeableActivity="true"
             android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|density|keyboard|keyboardHidden|fontScale"/>
 
+        <activity android:name=".StrictActivity" android:exported="false" android:theme="@style/CaptureTheme" android:excludeFromRecents="true" android:launchMode="singleTask"/>
         <activity android:name=".CaptureActivity" android:exported="true" android:theme="@style/CaptureTheme" android:excludeFromRecents="true">
             <intent-filter>
                 <action android:name="android.intent.action.SEND"/>

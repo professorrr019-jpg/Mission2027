@@ -85,6 +85,13 @@ object Auto {
             Rule("y05", "Sync and system", "Wallpaper noon", "t=12:00", "", "wall"),
             Rule("y06", "Sync and system", "Wallpaper dusk", "t=17:30", "", "wall"),
             Rule("y07", "Sync and system", "Wallpaper night", "t=19:30", "", "wall"),
+            Rule("y08", "Sync and system", "Clear idle apps at noon", "t=13:00", "", "clean"),
+            Rule("y09", "Sync and system", "Clear idle apps in the evening", "t=19:00", "", "clean"),
+            Rule("y10", "Sync and system", "Sync syllabus and mocks at night", "t=22:15", "", "sync"),
+            Rule("g01", "Targets", "Target behind schedule", "t=20:00;tbehind", "A target is behind its pace. Use tomorrow's slot for the weakest subject.", rec = true),
+            Rule("g02", "Targets", "Daily targets summary", "t=21:30;tany", "Open the Targets card: see today's minutes and the topics still left.", "n", rec = true),
+            Rule("g03", "Targets", "Sunday target review", "t=10:30;dow=7;tany", "Weekly review: tick finished topics, then adjust the finish dates.", "n"),
+            Rule("g04", "Targets", "No target set", "t=09:00;notarget", "You have no target. Add one in the Targets card: subject, topics, finish date, daily time.", "n"),
         )
 
     // ---------------- state ----------------
@@ -126,6 +133,9 @@ object Auto {
                     p == "cold" -> (Weather.cached()?.temperatureC ?: 99.0) <= 8.0
                     p.startsWith("dow=") -> today.dayOfWeek.value == p.removePrefix("dow=").toInt()
                     p.startsWith("days=") -> ChronoUnit.DAYS.between(today, Repo.examDate()) == p.removePrefix("days=").toLong()
+                    p == "tbehind" -> Targets.all().any { Targets.status(it).first.let { st -> st.startsWith("Behind") || st == "Overdue" } }
+                    p == "tany" -> Targets.all().isNotEmpty()
+                    p == "notarget" -> Targets.all().isEmpty()
                     p == "top0" -> Store.rows("tk_top").none { it.optString("d") == today.toString() }
                     else -> true
                 }
@@ -180,6 +190,7 @@ object Auto {
     private fun run(c: Context, r: Rule) {
         when (r.act) {
             "sync" -> Zite.sync(c)
+            "clean" -> Cleaner.run(c)
             "wall" -> if (Wallpaper.enabled()) Wallpaper.apply(c, true)
             else -> {
                 notify(c, r)

@@ -227,6 +227,15 @@ object Cards2 {
             row.addView(bar(c, if (total == 0) 0f else done.toFloat() / total, t.color), lp(-1, -2, 6))
             row.addView(c.text("$done/$total topics  -  " + fmtMins(t.mins) + "/day at " + "%02d:%02d".format(t.at.hour, t.at.minute), 11f, 0, T.text3), lp(-2, -2, 4))
             row.addView(c.text(st, 11f, 1, T.textAccent(stCol)), lp(-2, -2, 1))
+            row.addView(c.text("Today ${Slot.studiedToday(t)} of ${t.mins} min studied", 11f, 0, T.text3), lp(-2, -2, 1))
+            val subs = Slot.pending(c, t).groupBy { it.substringBefore('|') }
+            if (subs.isNotEmpty()) {
+                val chips = c.hbox()
+                subs.entries.take(4).forEach { (sName, ks) ->
+                    chips.addView(c.pill(Syl.short(sName) + " " + ks.size, "timer", false, t.color) { Slot.pickTopic(c, t, sName) }, lpm(-2, -2, 0, 0, 6, 0))
+                }
+                row.addView(chips, lp(-2, -2, 6))
+            }
             row.setOnClickListener { detail(h, t) }
             card.addView(row)
         }

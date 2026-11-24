@@ -86,6 +86,7 @@ object Targets {
         for (t in all()) {
             val end = t.end ?: continue
             if (end.isBefore(now.toLocalDate())) continue
+            if (progress(t).let { it.second > 0 && it.first >= it.second }) continue
             var cand = now.toLocalDate().atTime(t.at)
             val firedToday = t.o.optString("fired") == now.toLocalDate().toString()
             if (!cand.isAfter(now) || firedToday) cand = cand.plusDays(1)
@@ -109,6 +110,7 @@ object Targets {
             val end = t.end ?: continue
             if (end.isBefore(now.toLocalDate())) continue
             if (t.o.optString("fired") == now.toLocalDate().toString()) continue
+            if (progress(t).let { it.second > 0 && it.first >= it.second }) continue
             val due = now.toLocalDate().atTime(t.at)
             val lateMin = ChronoUnit.MINUTES.between(due, now)
             if (lateMin < 0 || lateMin > 120) continue // missed by more than 2 h: skip silently
@@ -145,42 +147,7 @@ object Targets {
     private fun card(
         c0: Context,
         t: JSONObject2,
-    ) {
-        val c = c0.applicationContext
-        if (!c.canOverlay()) return
-        val box =
-            LinearLayout(c).apply {
-                orientation = LinearLayout.VERTICAL
-                background = T.round(T.cardSolid, 18, 1, t.color)
-                padDp(12, 10, 12, 10)
-                T.elevate(this, 8, 18)
-            }
-        val head = c.hbox()
-        head.addView(View(c).apply { background = T.round(t.color, 5) }, LinearLayout.LayoutParams(T.dp(10), T.dp(10)))
-        head.addView(c.text(t.title, 13f, 2), lpm(-2, -2, 8, 0, 0, 0, 1f))
-        box.addView(head)
-        box.addView(c.text(fmtMins(t.mins) + " now - " + daysLeft(t) + " days left", 11.5f, 0, T.text2), lp(-2, -2, 4))
-        val row = c.hbox()
-        row.addView(
-            c.pill("Start", "timer", true, t.color) {
-                TimerState.start(t.firstSubject, "stopwatch")
-                TimerService.start(c)
-                Overlay.remove(c, "target_" + t.id)
-            },
-            lpm(-2, -2, 0, 0, 8, 0),
-        )
-        row.addView(c.pill("Later", null, false) { Overlay.remove(c, "target_" + t.id) }, lpm(-2, -2, 0, 0, 0, 0))
-        box.addView(row, lp(-2, -2, 8))
-        val dm = c.resources.displayMetrics
-        val lp =
-            Overlay.params(T.dp(230)).apply {
-                gravity = Gravity.TOP or Gravity.START
-                x = dm.widthPixels - T.dp(230) - T.dp(12)
-                y = T.dp(110)
-            }
-        Overlay.draggable(c, box, lp, "target_" + t.id)
-        Overlay.show(c, "target_" + t.id, box, lp, 120_000L)
-    }
+    ) = Slot.card(c0, t)
 
     // ---------------- Google Calendar ----------------
     fun addToCalendar(
@@ -244,8 +211,15 @@ object Targets {
                     val s = z.syl[si]
                     val keys = s.micros.map { s.name + "|" + it.name }
                     val checked = BooleanArray(keys.size) { keys[it] in topics }
-                    Dlg.builder(a).setTitle(Syl.short(s.name) + " topics")
-                        .setMultiChoiceItems(s.micros.map { it.name + "  (" + it.q + " PYQ)" }.toTypedArray(), checked) { _, i, on -> checked[i] = on }
+                    val yrs = Slot.pyqYears(a)
+                    val dn = Syl.doneSet()
+                    var dlg: android.app.AlertDialog? = null
+                    dlg = Dlg.builder(a).setTitle(Syl.short(s.name) + ": " + s.q + " Q in last " + yrs + " years")
+                        .setMultiChoiceItems(s.micros.mapIndexed { i, m -> (if (keys[i] in dn) "[done] " else "") + m.name + "  -  " + m.q + " Q (" + yrs + " yrs)" }.toTypedArray(), checked) { _, i, on -> checked[i] = on }
+                        .setNeutralButton("All pending") { _, _ ->
+                            keys.forEachIndexed { i, k -> if (k !in dn) topics.add(k) }
+                            refreshInfo()
+                        }
                         .setPositiveButton("Add") { _, _ ->
                             keys.forEachIndexed { i, k -> if (checked[i]) topics.add(k) else topics.remove(k) }
                             refreshInfo()
@@ -337,7 +311,7 @@ class TargetReceiver : BroadcastReceiver() {
         val pr = goAsync()
         Thread {
             try {
-                Targets.fire(c)
+                if (i.action == "target.later") Slot.reshow(c, i.getStringExtra("tid")) else Targets.fire(c)
             } catch (e: Exception) {
                 Log.e("target-receiver", e)
             } finally {

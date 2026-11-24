@@ -169,6 +169,7 @@ class TimerService : Service() {
 
         fun start(c: Context) {
             try {
+                Slot.dismiss(c)
                 c.startForegroundService(Intent(c, TimerService::class.java))
             } catch (e: Exception) {
                 Log.e("timer-start", e)

@@ -146,7 +146,12 @@ class CircleService : AccessibilityService() {
         }
     }
 
-    override fun onAccessibilityEvent(e: AccessibilityEvent?) {}
+    override fun onAccessibilityEvent(e: AccessibilityEvent?) {
+        if (e?.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
+            val pkg = e.packageName?.toString() ?: return
+            Slot.guard(this, pkg)
+        }
+    }
 
     override fun onInterrupt() {}
 
@@ -340,8 +345,7 @@ class CircleService : AccessibilityService() {
         val i =
             GEMINI_PACKAGES.asSequence().map { pkg ->
                 intentFor(u).setPackage(pkg).putExtra(Intent.EXTRA_TEXT, prompt).putExtra(Intent.EXTRA_SUBJECT, TAG)
-                    .addFlags(Intent.FLAG_ACTIVITY_MULTIPLE_TASK or Intent.FLAG_ACTIVITY_NEW_TASK)
-                    .addFlags(if (Store.b("circle_float", true)) Intent.FLAG_ACTIVITY_LAUNCH_ADJACENT else 0)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }.firstOrNull { packageManager.queryIntentActivities(it, 0).isNotEmpty() } ?: return false
         return try {
             val dm = resources.displayMetrics
@@ -363,7 +367,26 @@ class CircleService : AccessibilityService() {
             }
             val ob = o.toBundle() ?: Bundle()
             if (Store.b("circle_float", true)) ob.putInt("android.activity.windowingMode", 5)
-            startActivity(i, ob)
+            if (Store.b("circle_float", true)) {
+                // Step 1: open Gemini itself in the small floating window. Step 2: send the image into that same task,
+                // so Gemini cannot bounce it into a second full-screen task (which made the floating window vanish).
+                val pkg = i.`package` ?: GEMINI_PACKAGES.first()
+                val main = packageManager.getLaunchIntentForPackage(pkg)
+                if (main != null) {
+                    startActivity(main.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), ob)
+                    ui.postDelayed({
+                        try {
+                            startActivity(i)
+                        } catch (e: Exception) {
+                            Log.e("circle-gemini2", e)
+                        }
+                    }, 1100)
+                } else {
+                    startActivity(i, ob)
+                }
+            } else {
+                startActivity(i)
+            }
             checkFloat()
             toast("Sent to Gemini  -  prompt copied if it needs pasting")
             autoSend(0)
@@ -427,12 +450,17 @@ class CircleService : AccessibilityService() {
 
     private fun autoSend(n: Int) {
         if (n == 0) typedAt = -1
-        if (n > 40 || !Store.b("circle_autosend", true)) return
+        if (n > 60 || !Store.b("circle_autosend", true)) return
         ui.postDelayed({
             var done = false
             try {
                 val root = geminiRoot()
                 if (root != null) {
+                    // Gemini may ask Continue / Start / Got it first: press those by itself
+                    if (pressPrompt(root, 0)) {
+                        autoSend(n + 1)
+                        return@postDelayed
+                    }
                     val ed = findEditor(root, 0)
                     val cur = ed?.text?.toString() ?: ""
                     if (ed != null && !cur.contains(TAG)) {
@@ -453,6 +481,24 @@ class CircleService : AccessibilityService() {
             }
             if (!done) autoSend(n + 1)
         }, 600)
+    }
+
+    private val PROMPT_BUTTONS =
+        setOf("continue", "start", "get started", "got it", "i agree", "agree", "accept", "next", "ok", "okay", "allow", "skip", "no thanks", "not now", "जारी रखें", "शुरू करें", "ठीक है", "स्वीकार करें", "अभी नहीं")
+
+    private fun pressPrompt(node: AccessibilityNodeInfo, depth: Int): Boolean {
+        if (depth > 14) return false
+        val t = (node.text?.toString() ?: node.contentDescription?.toString() ?: "").trim().lowercase()
+        if (t.isNotEmpty() && t in PROMPT_BUTTONS && node.isVisibleToUser && (node.className?.toString() ?: "").let { it.contains("Button") || node.isClickable }) {
+            var c: AccessibilityNodeInfo? = node
+            while (c != null && !c.isClickable) c = c.parent
+            if (c != null && c.performAction(AccessibilityNodeInfo.ACTION_CLICK)) return true
+        }
+        for (k in 0 until node.childCount) {
+            val ch = node.getChild(k) ?: continue
+            if (pressPrompt(ch, depth + 1)) return true
+        }
+        return false
     }
 
     private fun Bundle.putCharSequenceCompat(t: CharSequence): Bundle {

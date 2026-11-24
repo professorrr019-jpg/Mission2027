@@ -40,6 +40,12 @@ class SettingsActivity : Activity() {
     override fun onCreate(b: Bundle?) {
         super.onCreate(b)
         Boot.ensure(this)
+        if (Slot.strictOn()) {
+            // Settings stay closed during a study slot; the emergency code screen opens instead.
+            startActivity(Intent(this, StrictActivity::class.java).putExtra("pkg", packageName))
+            finish()
+            return
+        }
         systemBars(T.page)
         val root = vbox()
         root.setBackgroundColor(T.page)
@@ -837,6 +843,12 @@ class SettingsActivity : Activity() {
         val c = this@SettingsActivity
         label("Daily goal")
         group(num("Study goal", "study_goal_min", 360, 30, 1000, "min"))
+        label("Strict study slot")
+        group(
+            sw("Strict focus during a slot", "While a target's study slot is open only study apps and pinned apps work. Needs the accessibility service (Circle to Search section)", "strict_slot", true),
+            num("Emergency unlock time", "strict_unlock_min", 15, 5, 60, "min", "Typing the random 15 character code unlocks for this long"),
+        )
+        note("Settings and every other app are blocked in the slot. Add your study apps in Study apps, and pin the ones you need on the dock.")
         label("Timer")
         group(
             num("Pomodoro focus", "pomo_work", 25, 5, 120, "min"),
