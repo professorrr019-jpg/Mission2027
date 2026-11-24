@@ -25,6 +25,34 @@ class Notifs : NotificationListenerService() {
         fun block(): Set<String> = if (Store.has("block_apps")) Store.stringList("block_apps").toSet() else DEFAULT_BLOCK.toSet()
 
         fun keep(): Set<String> = if (Store.has("keep_apps")) Store.stringList("keep_apps").toSet() else DEFAULT_KEEP.toSet()
+
+        fun postDigest(c: android.content.Context) {
+            if (!FeatureRegistry.enabled("x20_notification_digest")) return
+            if (!c.nm().areNotificationsEnabled() || c.nm().getNotificationChannel(CH_DIGEST)?.importance == android.app.NotificationManager.IMPORTANCE_NONE) return
+            val pending = Store.rows("important").filterNot { it.optBoolean("digest_sent", false) }
+            if (pending.isEmpty()) return
+            val latest = pending.takeLast(8)
+            val summary = latest.joinToString("\n") { "- " + it.optString("title").ifBlank { "Notification" }.take(72) }
+            val open = android.content.Intent(c, MainActivity::class.java)
+                .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            val pi = android.app.PendingIntent.getActivity(c, 7400, open, android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT)
+            c.nm().notify(
+                7400,
+                android.app.Notification.Builder(c, CH_DIGEST)
+                    .setSmallIcon(android.R.drawable.ic_dialog_info)
+                    .setContentTitle("${pending.size} important notifications")
+                    .setContentText("Your notification digest is ready")
+                    .setStyle(android.app.Notification.BigTextStyle().bigText(summary))
+                    .setContentIntent(pi)
+                    .setAutoCancel(true)
+                    .setVisibility(android.app.Notification.VISIBILITY_PRIVATE)
+                    .build(),
+            )
+            pending.forEach { row ->
+                val id = row.optString("id")
+                if (id.isNotBlank()) Store.update("important", id) { it.put("digest_sent", true) }
+            }
+        }
     }
 
     override fun onNotificationPosted(s: StatusBarNotification) {

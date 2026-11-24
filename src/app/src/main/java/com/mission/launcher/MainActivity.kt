@@ -629,7 +629,6 @@ class MainActivity : Activity(), Host {
     private var dy0 = 0f
     private var topAtDown = false
     private var hotCornerDown = -1
-    private var bottomEdgeDown = false
 
     override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
         if (FeatureRegistry.enabled("x34_keyboard_spotlight") && drawer == null && gateView == null && rightPanel == null && !editing && event.action == android.view.KeyEvent.ACTION_DOWN && event.repeatCount == 0 && currentFocus !is EditText) {
