@@ -40,7 +40,7 @@ object Targets {
         val color: Int get() = T.palette[o.optInt("col", 0).coerceAtLeast(0) % T.palette.size]
         val topics: List<String> get() {
             val a = o.optJSONArray("topics") ?: JSONArray()
-            return (0 until a.length()).map { a.optString(it) }.filter { it.isNotBlank() }
+            return (0 until a.length()).map { a.optString(it) }.filter { it.isNotBlank() }.map { if (Pyq.ready) Pyq.mapKey(it) else it }.distinct()
         }
         val firstSubject: String get() = topics.firstOrNull()?.substringBefore('|') ?: "General"
     }
@@ -202,28 +202,11 @@ object Targets {
         refreshInfo()
         box.addView(topicsInfo, lp(-2, -2, 10))
         box.addView(
-            a.pill("Choose subject and topics", "grid") {
-                if (z.syl.isEmpty()) {
-                    a.toast("Syllabus not loaded yet - sync Zite first")
-                    return@pill
-                }
-                Dlg.choose(a, "Subject", z.syl.map { it.name }) { si ->
-                    val s = z.syl[si]
-                    val keys = s.micros.map { s.name + "|" + it.name }
-                    val checked = BooleanArray(keys.size) { keys[it] in topics }
-                    val yrs = Slot.pyqYears(a)
-                    val dn = Syl.doneSet()
-                    var dlg: android.app.AlertDialog? = null
-                    dlg = Dlg.builder(a).setTitle(Syl.short(s.name) + ": " + s.q + " Q in last " + yrs + " years")
-                        .setMultiChoiceItems(s.micros.mapIndexed { i, m -> (if (keys[i] in dn) "[done] " else "") + m.name + "  -  " + m.q + " Q (" + yrs + " yrs)" }.toTypedArray(), checked) { _, i, on -> checked[i] = on }
-                        .setNeutralButton("All pending") { _, _ ->
-                            keys.forEachIndexed { i, k -> if (k !in dn) topics.add(k) }
-                            refreshInfo()
-                        }
-                        .setPositiveButton("Add") { _, _ ->
-                            keys.forEachIndexed { i, k -> if (checked[i]) topics.add(k) else topics.remove(k) }
-                            refreshInfo()
-                        }.setNegativeButton("Cancel", null).show()
+            a.pill("Choose topics (colour coded, with PYQ counts)", "grid") {
+                PyqUi.pick(a, "Choose topics for this target", null, topics, false, "Add") { sel ->
+                    topics.clear()
+                    topics.addAll(sel)
+                    refreshInfo()
                 }
             },
             lp(-2, -2, 8),

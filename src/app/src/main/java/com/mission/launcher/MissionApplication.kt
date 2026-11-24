@@ -17,6 +17,7 @@ class MissionApplication : Application() {
         Boot.ensure(this)
         installCrashLogger()
         Backdrop.ctx = applicationContext
+        Thread { try { Pyq.load(applicationContext) } catch (e: Exception) { android.util.Log.e("pyq", "load", e) } }.start()
         MissionSyncWorker.schedule(this)
         NotificationDigestWorker.setEnabled(this, FeatureRegistry.enabled("x20_notification_digest"))
         if (BuildConfig.DEBUG) {

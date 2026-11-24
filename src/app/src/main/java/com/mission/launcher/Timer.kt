@@ -29,6 +29,8 @@ data class TimerFinishResult(val wasActive: Boolean, val saved: Boolean, val min
 }
 
 object TimerState {
+    fun bringBack(c: Context) = TimerService.bringBack(c)
+
     const val HEARTBEAT_MS = 15_000L
 
     fun running() = Store.b("timer_running")
@@ -166,6 +168,21 @@ class TimerService : Service() {
     companion object {
         const val ACT_TOGGLE = "t.toggle"
         const val ACT_STOP = "t.stop"
+        const val ACT_BRING = "t.bring"
+
+        /** Puts the floating timer back on screen (position reset) if it was dragged out of view. */
+        fun bringBack(c: Context) {
+            if (!TimerState.active()) {
+                c.toast("No timer is running")
+                return
+            }
+            try {
+                c.startForegroundService(Intent(c, TimerService::class.java).setAction(ACT_BRING))
+                c.toast("Timer brought back")
+            } catch (e: Exception) {
+                Log.e("timer-bring", e)
+            }
+        }
 
         fun start(c: Context) {
             try {
@@ -254,6 +271,11 @@ class TimerService : Service() {
                     if (TimerState.running()) TimerState.pause() else TimerState.resume()
                     Store.put("timer_auto_paused", false)
                     Store.put("timer_idle_paused", false)
+                }
+                ACT_BRING -> {
+                    Store.put("timer_x", T.dp(24))
+                    Store.put("timer_y", T.dp(120))
+                    expanded = false
                 }
                 ACT_STOP -> {
                     android.widget.Toast.makeText(this, TimerState.finish(true).message, android.widget.Toast.LENGTH_LONG).show()
@@ -347,7 +369,8 @@ class TimerService : Service() {
                     a(1, ACT_TOGGLE),
                 ).build(),
             )
-            .addAction(Notification.Action.Builder(Icon.createWithResource(this, icon), "Stop and save", a(2, ACT_STOP)).build()).build()
+            .addAction(Notification.Action.Builder(Icon.createWithResource(this, icon), "Stop and save", a(2, ACT_STOP)).build())
+            .addAction(Notification.Action.Builder(Icon.createWithResource(this, icon), "Show timer", a(3, ACT_BRING)).build()).build()
     }
 
     private fun tick() {
@@ -553,8 +576,9 @@ class TimerService : Service() {
         root.addView(pn)
         val params =
             Overlay.params().apply {
-                x = Store.i("timer_x", T.dp(24))
-                y = Store.i("timer_y", T.dp(120))
+                val dm = resources.displayMetrics
+                x = Store.i("timer_x", T.dp(24)).coerceIn(0, (dm.widthPixels - T.dp(90)).coerceAtLeast(0))
+                y = Store.i("timer_y", T.dp(120)).coerceIn(0, (dm.heightPixels - T.dp(60)).coerceAtLeast(0))
             }
         lp = params
         pill = root
@@ -577,8 +601,9 @@ class TimerService : Service() {
                     val dy = (e.rawY - sy).toInt()
                     if (Math.abs(dx) + Math.abs(dy) > T.dp(8)) moved = true
                     if (moved) {
-                        params.x = ox + dx
-                        params.y = oy + dy
+                        val dm = c.resources.displayMetrics
+                        params.x = (ox + dx).coerceIn(0, (dm.widthPixels - root.width.coerceAtLeast(T.dp(60))).coerceAtLeast(0))
+                        params.y = (oy + dy).coerceIn(0, (dm.heightPixels - root.height.coerceAtLeast(T.dp(40))).coerceAtLeast(0))
                         Overlay.update(c, "timer", params)
                     }
                 }

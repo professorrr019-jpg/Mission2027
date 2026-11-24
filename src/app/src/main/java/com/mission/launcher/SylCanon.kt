@@ -248,6 +248,7 @@ object SylCanon {
 
     /** The single sub-topic a raw Zite micro-theme belongs to (the raw name when the subject is not known). */
     fun canon(subject: String, micro: String): String {
+        if (Pyq.ready) return Pyq.mapMicro(Pyq.subject(subject)?.name ?: subject, micro)
         val spec = key(subject)?.let { SPEC[it] } ?: return micro
         val m = clean(micro)
         return spec.topics.firstOrNull { it.rx != null && it.rx.containsMatchIn(m) }?.name ?: spec.fallback
@@ -255,6 +256,9 @@ object SylCanon {
 
     /** Rebuilds the tree: canonical sub-topics in study order, sub-themes and PYQ counts merged. */
     fun apply(list: List<Subj>): List<Subj> =
+        if (Pyq.ready) Pyq.syl() else applyOld(list)
+
+    private fun applyOld(list: List<Subj>): List<Subj> =
         list.map { s ->
             val spec = key(s.name)?.let { SPEC[it] } ?: return@map s
             val buckets = LinkedHashMap<String, LinkedHashMap<String, Int>>()
@@ -274,7 +278,7 @@ object SylCanon {
         val out = HashMap<String, IntArray>()
         raw.forEach { (k, v) ->
             val i = k.indexOf('|')
-            val nk = if (i < 0) k else k.substring(0, i) + "|" + canon(k.substring(0, i), k.substring(i + 1))
+            val nk = if (i < 0) k else if (Pyq.ready) Pyq.mapKey(k) else k.substring(0, i) + "|" + canon(k.substring(0, i), k.substring(i + 1))
             val cur = out.getOrPut(nk) { IntArray(3) }
             for (j in 0 until minOf(3, v.size)) cur[j] += v[j]
         }
@@ -292,7 +296,7 @@ object SylCanon {
             val rest = k.substring(i + 1)
             val j = rest.indexOf('|')
             val micro = if (j < 0) rest else rest.substring(0, j)
-            val nk = k.substring(0, i) + "|" + canon(k.substring(0, i), micro) + (if (j < 0) "" else rest.substring(j))
+            val nk = if (Pyq.ready) Pyq.mapKey(k) else k.substring(0, i) + "|" + canon(k.substring(0, i), micro) + (if (j < 0) "" else rest.substring(j))
             if (nk != k && nk !in done && nk !in add) add.add(nk)
         }
         if (add.isNotEmpty()) Store.setStringList("syl_done", done + add)

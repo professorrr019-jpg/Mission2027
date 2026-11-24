@@ -1160,6 +1160,7 @@ class SettingsActivity : Activity() {
                     }.start()
                 }
             },
+            action("refresh", T.danger, "Restart + clean everything", "Password protected: deletes cache, stops idle apps, restarts Mission") { Restart.ask(this@SettingsActivity) },
             action("shield", T.sage, "Never clear these", "${Store.stringList("clean_keep").size} apps kept") { multiPick("Keep running", "clean_keep") },
         )
         note("Only background apps are stopped. Android or HyperOS may restart some of them. Telegram, WhatsApp, Flexcil, Gemini, music apps, keyboard and dialer are always kept.")
@@ -1889,7 +1890,8 @@ class SettingsActivity : Activity() {
         label("Full-screen gestures")
         group(
             sw("Edge swipe = Back", "Swipe in from the left or right edge, in any app, like the Redmi full-screen gesture. Needs the accessibility service", "edge_nav", true) { CircleService.inst?.updateEdges() },
-            sw("Bottom swipe = Home / Recents", "Swipe up from the bottom centre for Home, swipe up and hold for Recents", "edge_bottom", false) { CircleService.inst?.updateEdges() },
+            sw("Bottom swipe = Home / Recents", "Swipe up from the bottom centre for Home, swipe up and hold for Recents", "edge_bottom", true) { CircleService.inst?.updateEdges() },
+            action("gear", T.sage, "Turn on system full-screen gestures", "Removes the bottom navigation buttons of the tablet") { NavGesture.enable(this@SettingsActivity) },
         )
         note("Android has no Forward action, so Back is the edge gesture. Turn on Mission under Accessibility (Circle to Search section) first.")
         label("Multitasking")

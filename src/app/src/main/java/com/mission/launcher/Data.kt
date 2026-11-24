@@ -141,6 +141,7 @@ object Zite {
                 )
             }
         val sylJ = if (cache.has("syl")) cache.optJSONArray("syl") else JSONArray(asset(c, "syllabus.json"))
+        Pyq.load(c)
         val syl = SylCanon.apply(parseTree(sylJ ?: JSONArray()))
         try {
             SylCanon.migrateDone()
@@ -180,6 +181,10 @@ object Zite {
                 years.optJSONObject(year)?.let { counts -> counts.keys().forEach { subject -> subjects[subject] = counts.optInt(subject) } }
                 year.toIntOrNull()?.let { pyqYears[it] = subjects }
             }
+        }
+        if (Pyq.ready) {
+            pyqYears.clear()
+            pyqYears.putAll(Pyq.yearTable())
         }
         return ZData(mocks, atts, syl, sr, SylCanon.mergeResp(mr), pyqYears, cache.optLong("updated", 0L), live)
     }

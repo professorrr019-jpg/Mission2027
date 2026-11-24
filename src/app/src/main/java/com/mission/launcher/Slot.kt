@@ -14,6 +14,8 @@ import android.provider.Settings
 import android.view.Gravity
 import android.view.View
 import android.widget.LinearLayout
+import android.widget.TextView
+import kotlin.math.min
 import java.security.SecureRandom
 import java.time.LocalDateTime
 import java.time.ZoneId
@@ -42,6 +44,8 @@ object Slot {
     /** Questions asked on this topic in the PYQ data (15 years of Prelims). */
     fun pyq(c: Context, key: String): Int =
         try {
+            Pyq.load(c)
+            Pyq.micro(key)?.let { return it.last15 }
             val sub = key.substringBefore('|')
             val topic = key.substringAfter('|', key)
             Zite.data(c).syl.firstOrNull { it.name == sub }?.micros?.firstOrNull { it.name == topic }?.q ?: 0
@@ -51,7 +55,7 @@ object Slot {
 
     fun pyqYears(c: Context): Int =
         try {
-            Zite.data(c).pyqYears.keys.size.coerceIn(1, 15).let { if (it < 5) 15 else it }
+            15
         } catch (e: Exception) {
             15
         }
@@ -104,15 +108,39 @@ object Slot {
         dismiss(c)
     }
 
-    /** Dialog used on the home Targets card: pick a topic of one subject, then the timer starts. */
-    fun pickTopic(a: Activity, t: Targets.JSONObject2, subject: String) {
-        val keys = pending(a, t).filter { it.substringBefore('|') == subject }
+    /** Starts one timer for several topics at once. Subject = the first topic's subject, topic text = names joined. */
+    fun beginMulti(c: Context, t: Targets.JSONObject2, keys: List<String>) {
         if (keys.isEmpty()) {
-            begin(a, t, subject, null)
+            begin(c, t, t.firstSubject, null)
             return
         }
-        val items = keys.map { Targets.topicName(it) + "  -  " + pyq(a, it) + " Q" } + "Whole subject, no topic"
-        Dlg.choose(a, Syl.short(subject) + ": start timer for", items) { i -> begin(a, t, subject, keys.getOrNull(i)) }
+        if (keys.size == 1) {
+            begin(c, t, keys[0].substringBefore('|'), keys[0])
+            return
+        }
+        if (TimerState.active()) {
+            c.toast("A timer is already running")
+        } else {
+            val subj = keys[0].substringBefore('|')
+            val names = keys.joinToString(" + ") { Targets.topicName(it) }
+            TimerState.start(subj, "stopwatch", names)
+            TimerService.start(c)
+            Store.put("slot_target", t.id)
+            Store.setStringList("slot_keys", keys)
+            c.toast("Timer started: ${keys.size} topics")
+        }
+        dismiss(c)
+    }
+
+    /** Dialog used on the home Targets card: pick one or many topics (colour coded, with PYQ counts), then the timer starts. */
+    fun pickTopic(a: Activity, t: Targets.JSONObject2, subject: String?) {
+        val all = pending(a, t)
+        val keys = if (subject == null) all else all.filter { it.substringBefore('|') == subject }
+        if (keys.isEmpty()) {
+            begin(a, t, subject ?: t.firstSubject, null)
+            return
+        }
+        PyqUi.pick(a, (subject?.let { Syl.short(it) } ?: t.title) + ": choose topics for the timer", keys, emptyList(), false, "Start timer") { beginMulti(a, t, it) }
     }
 
     fun card(c0: Context, t: Targets.JSONObject2) {
@@ -154,25 +182,50 @@ object Slot {
                 box.addView(c.text("Pick a subject to start its timer", 11f, 1, T.text2), lp(-2, -2, 8))
                 subs.entries.take(6).forEach { (s, ks) ->
                     box.addView(
-                        c.pill(Syl.short(s) + "  (" + ks.size + " left)", "timer", true, t.color) {
+                        c.pill(Syl.short(s) + "  (" + ks.size + " left, " + ks.sumOf { pyq(c, it) } + " Q)", "timer", true, Pyq.colorOf(s)) {
                             if (ks.size == 1) begin(c, t, s, ks[0]) else showTopics(s, ks)
                         },
                         lp(-1, -2, 5),
                     )
                 }
             }
+            if (subs.size > 1) {
+                box.addView(c.text("Tip: open a subject and tick several topics to run one timer for all of them.", 10.5f, 0, T.text3), lp(-2, -2, 6))
+            }
             box.addView(c.pill("Later (5 min)", null, false) { later(c, t) }, lp(-2, -2, 8))
         }
 
         fun topicsView(s: String, ks: List<String>) {
             box.removeAllViews()
-            box.addView(c.text(Syl.short(s) + ": choose the topic", 12.5f, 2), lp(-2, -2, 0))
-            ks.take(8).forEach { k ->
-                box.addView(c.pill(Targets.topicName(k).take(34) + "  -  " + pyq(c, k) + " Q", null, false) { begin(c, t, s, k) }, lp(-1, -2, 5))
+            val col = Pyq.colorOf(s)
+            val chosen = LinkedHashSet<String>()
+            box.addView(c.text(Syl.short(s) + ": tick one or more topics", 12.5f, 2, T.textAccent(col)), lp(-2, -2, 0))
+            val listBox = LinearLayout(c).apply { orientation = LinearLayout.VERTICAL }
+            val startBtn = c.pill("Start timer", "timer", true, col) { }
+            fun redo() {
+                listBox.removeAllViews()
+                ks.take(10).forEach { k ->
+                    val m = Pyq.micro(k)
+                    val on = k in chosen
+                    val tc = m?.let { Pyq.tierColor(it.tier) } ?: T.slate
+                    val row = c.hbox()
+                    row.background = T.round(if (on) T.withAlpha(col, 0.22f) else T.inset, 10)
+                    row.padDp(8, 6, 8, 6)
+                    row.addView(c.text(if (on) "\u2713" else "\u25CB", 13f, 3, T.textAccent(col)), lpm(T.dp(16), -2, 0, 0, 6, 0))
+                    row.addView(c.text(Targets.topicName(k), 11.5f, 2, T.text, 2), LinearLayout.LayoutParams(0, -2, 1f))
+                    row.addView(PyqUi.chip(c, (m?.last15 ?: pyq(c, k)).toString() + " Q", tc, true), lpm(-2, -2, 6, 0, 0, 0))
+                    row.tap(false) { if (!chosen.add(k)) chosen.remove(k); redo() }
+                    listBox.addView(row, lp(-1, -2, 4))
+                }
+                ((startBtn.getChildAt(startBtn.childCount - 1)) as? TextView)?.text = if (chosen.isEmpty()) "Start (whole subject)" else "Start timer (${chosen.size})"
             }
-            if (ks.size > 8) box.addView(c.text("+${ks.size - 8} more in the Targets card", 10.5f, 0, T.text3), lp(-2, -2, 4))
+            val sv = android.widget.ScrollView(c).apply { addView(listBox) }
+            box.addView(sv, LinearLayout.LayoutParams(-1, T.dp(min(260, 44 * ks.take(10).size + 8)), 0f).apply { topMargin = T.dp(6) })
+            if (ks.size > 10) box.addView(c.text("+${ks.size - 10} more: use Start in the Targets card", 10.5f, 0, T.text3), lp(-2, -2, 4))
+            redo()
+            startBtn.setOnClickListener { if (chosen.isEmpty()) begin(c, t, s, null) else beginMulti(c, t, ks.filter { it in chosen }) }
             val r = c.hbox()
-            r.addView(c.pill("Whole subject", "timer", true, t.color) { begin(c, t, s, null) }, lpm(-2, -2, 0, 0, 8, 0))
+            r.addView(startBtn, lpm(-2, -2, 0, 0, 8, 0))
             r.addView(c.pill("Back", null, false) { home() })
             box.addView(r, lp(-2, -2, 8))
         }

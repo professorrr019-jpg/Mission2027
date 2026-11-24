@@ -1746,6 +1746,13 @@ object Cards {
             tile("calendar", "Mock schedule", T.slate) { Toolkit.mockSchedule(c) },
         ).forEach { r3.addView(it, lpm(0, -2, 0, 0, 8, 0, 1f)) }
         card.addView(r3, lp(-1, -2, 8))
+        val r3b = c.hbox(false)
+        listOf(
+            tile("grid", "PYQ explorer", T.terra) { PyqUi.explorer(h.act) },
+            tile("refresh", "Restart + clean", T.danger) { Restart.ask(h.act) },
+            tile("timer", "Show timer", T.teal) { TimerState.bringBack(c) },
+        ).forEach { r3b.addView(it, lpm(0, -2, 0, 0, 8, 0, 1f)) }
+        card.addView(r3b, lp(-1, -2, 8))
         val r4 = c.hbox(false)
         val small = Store.b("compact_cards", true)
         val smallText = Store.f("text_scale", 1f) < 0.95f

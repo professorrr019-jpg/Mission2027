@@ -1247,7 +1247,8 @@ class MainActivity : Activity(), Host {
                 elevation = T.dpf(12f)
                 setOnClickListener { }
             }
-        panel.addView(text("Quick controls", 18f, 3), lp(-1, -2, 10))
+        panel.addView(text("Control panel", 18f, 3), lp(-1, -2, 4))
+        panel.addView(text("Swipe or tap outside to close", 11f, 0, T.text3), lp(-1, -2, 2))
         val recentRow = hbox()
         var recentCount = 0
         LauncherRecents.packages().mapNotNull(Apps::byPkg).take(5).forEach { entry ->
@@ -1269,24 +1270,59 @@ class MainActivity : Activity(), Host {
                 lpm(T.dp(50), T.dp(50), 4, 0, 4, 0),
             )
         }
-        if (recentCount > 0) panel.addView(recentRow, lp(-1, -2, 8))
-        panel.addView(pill("Search apps", "search", false) { closeRightPanel(); openDrawer() }, lp(-1, -2, 6))
-        panel.addView(pill("Quick note", "note", false) { closeRightPanel(); startActivity(Intent(this, VoiceNoteActivity::class.java)) }, lp(-1, -2, 6))
-        panel.addView(
-            pill(if (TimerState.active()) "Stop study timer" else "Start study timer", "timer", true) {
-                if (TimerState.active()) {
-                    TimerState.finish(true)
-                    TimerService.stop(this)
-                } else {
-                    TimerState.start()
-                    TimerService.start(this)
-                }
-                closeRightPanel()
-            },
-            lp(-1, -2, 6),
-        )
-        panel.addView(pill("Settings", "gear", false) { closeRightPanel(); openSettings() }, lp(-1, -2, 6))
-        val width = minOf(T.dp(300), (resources.displayMetrics.widthPixels * 0.82f).toInt())
+        if (recentCount > 0) panel.addView(recentRow, lp(-1, -2, 10))
+        fun tile(ic: String, label: String, tint: Int, f: () -> Unit): View =
+            vbox().apply {
+                gravity = Gravity.CENTER
+                padDp(4, 12, 4, 10)
+                background = T.round(T.withAlpha(tint, 0.16f), 18)
+                addView(icon(ic, T.textAccent(tint), 24, 1.9f))
+                addView(text(label, 11f, 2, T.text, 1).apply { gravity = Gravity.CENTER }, lp(-2, -2, 6))
+                tap { f() }
+            }
+        val tiles =
+            listOf(
+                tile("chevl", "Back", T.sage) { closeRightPanel(); ui.postDelayed({ CircleService.global(this, android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_BACK) }, 200) },
+                tile("home", "Home", T.slate) { closeRightPanel() },
+                tile("layers", "Recents", T.plum) { closeRightPanel(); ui.postDelayed({ CircleService.global(this, android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_RECENTS) }, 200) },
+                tile("trash", "Clear cache", T.amber) {
+                    closeRightPanel()
+                    Thread {
+                        val n = try { Cleaner.run(this, 0) } catch (e: Exception) { 0 }
+                        var kb = 0L
+                        try { cacheDir.listFiles()?.forEach { f -> kb += f.length(); f.deleteRecursively() } } catch (e: Exception) { }
+                        try { Apps.iconCacheClear?.invoke(); Backdrop.clear() } catch (e: Exception) { }
+                        runOnUiThread { toast("Cache ${kb / 1024} KB cleared, $n apps stopped") }
+                    }.start()
+                },
+                tile("refresh", "Restart", T.danger) { closeRightPanel(); Restart.ask(this) },
+                tile("timer", if (TimerState.active()) "Stop timer" else "Study timer", T.terra) {
+                    if (TimerState.active()) {
+                        TimerState.finish(true)
+                        TimerService.stop(this)
+                    } else {
+                        TimerState.start()
+                        TimerService.start(this)
+                    }
+                    closeRightPanel()
+                },
+                tile("eye", "Show timer", T.teal) { closeRightPanel(); TimerState.bringBack(this) },
+                tile("search", "Circle search", T.plum) { closeRightPanel(); ui.postDelayed({ CircleService.capture(this) }, 250) },
+                tile("note", "Quick note", T.clay) { closeRightPanel(); startActivity(Intent(this, VoiceNoteActivity::class.java)) },
+                tile("grid", "PYQ explorer", T.terra) { closeRightPanel(); PyqUi.explorer(this) },
+                tile("bell", "Notifications", T.amber) { closeRightPanel(); CircleService.shade(this) },
+                tile("lock", "Lock", T.slate) { closeRightPanel(); CircleService.lock(this) },
+                tile("apps", "Apps", T.sage) { closeRightPanel(); openDrawer() },
+                tile("sparkle", "Toolkit", T.sage) { closeRightPanel(); Toolkit.open(this) },
+                tile("gear", "Settings", T.text2) { closeRightPanel(); openSettings() },
+            )
+        tiles.chunked(3).forEach { rowTiles ->
+            val r = hbox(false)
+            rowTiles.forEach { r.addView(it, lpm(0, -2, 3, 0, 3, 0, 1f)) }
+            repeat(3 - rowTiles.size) { r.addView(View(this), lpm(0, 1, 3, 0, 3, 0, 1f)) }
+            panel.addView(r, lp(-1, -2, 8))
+        }
+        val width = minOf(T.dp(380), (resources.displayMetrics.widthPixels * 0.9f).toInt())
         overlay.addView(
             panel,
             FrameLayout.LayoutParams(width, -2, Gravity.END or Gravity.CENTER_VERTICAL).apply {

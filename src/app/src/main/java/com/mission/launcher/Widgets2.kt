@@ -228,13 +228,34 @@ object Cards2 {
             row.addView(c.text("$done/$total topics  -  " + fmtMins(t.mins) + "/day at " + "%02d:%02d".format(t.at.hour, t.at.minute), 11f, 0, T.text3), lp(-2, -2, 4))
             row.addView(c.text(st, 11f, 1, T.textAccent(stCol)), lp(-2, -2, 1))
             row.addView(c.text("Today ${Slot.studiedToday(t)} of ${t.mins} min studied", 11f, 0, T.text3), lp(-2, -2, 1))
-            val subs = Slot.pending(c, t).groupBy { it.substringBefore('|') }
+            val pend = Slot.pending(c, t)
+            val subs = pend.groupBy { it.substringBefore('|') }
             if (subs.isNotEmpty()) {
-                val chips = c.hbox()
-                subs.entries.take(4).forEach { (sName, ks) ->
-                    chips.addView(c.pill(Syl.short(sName) + " " + ks.size, "timer", false, t.color) { Slot.pickTopic(c, t, sName) }, lpm(-2, -2, 0, 0, 6, 0))
+                val q15 = pend.sumOf { Slot.pyq(c, it) }
+                row.addView(c.text("${pend.size} topics left  -  $q15 PYQs in last 15 years", 11f, 2, T.textAccent(t.color)), lp(-2, -2, 4))
+                // next topics, colour coded by subject, tier badge and PYQ count
+                pend.take(4).forEach { k ->
+                    val m = Pyq.micro(k)
+                    val sc = Pyq.colorOf(k.substringBefore('|'))
+                    val line = c.hbox()
+                    line.background = T.round(T.withAlpha(sc, 0.12f), 9)
+                    line.padDp(8, 5, 8, 5)
+                    line.addView(View(c).apply { background = T.round(sc, 3) }, LinearLayout.LayoutParams(T.dp(4), T.dp(14)))
+                    line.addView(c.text(Targets.topicName(k), 11.5f, 2, T.text, 1), lpm(0, -2, 8, 0, 6, 0, 1f))
+                    if (m != null) {
+                        line.addView(PyqUi.chip(c, "${m.last15} Q", Pyq.tierColor(m.tier), true))
+                        line.addView(c.text("  5y ${m.recent5}", 10.5f, 1, T.text3))
+                    }
+                    line.tap(false) { if (m != null) PyqUi.detail(c, k) else Slot.pickTopic(c, t, k.substringBefore('|')) }
+                    row.addView(line, lp(-1, -2, 4))
                 }
-                row.addView(chips, lp(-2, -2, 6))
+                if (pend.size > 4) row.addView(c.text("+${pend.size - 4} more topics", 10.5f, 0, T.text3), lp(-2, -2, 3))
+                val chips = c.hbox()
+                chips.addView(c.pill("Start timer", "timer", true, t.color) { Slot.pickTopic(c, t, null) }, lpm(-2, -2, 0, 0, 6, 0))
+                subs.entries.take(3).forEach { (sName, ks) ->
+                    chips.addView(c.pill(Syl.short(sName) + " " + ks.size, null, false, Pyq.colorOf(sName)) { Slot.pickTopic(c, t, sName) }, lpm(-2, -2, 0, 0, 6, 0))
+                }
+                row.addView(c.chipRow(*(0 until chips.childCount).map { chips.getChildAt(it) }.also { chips.removeAllViews() }.toTypedArray()), lp(-1, -2, 6))
             }
             row.setOnClickListener { detail(h, t) }
             card.addView(row)
@@ -255,8 +276,21 @@ object Cards2 {
         box.addView(a.text("$done of $total topics done", 12f, 0, T.text2), lp(-2, -2, 2))
         t.topics.forEach { k ->
             val ok = k in d
-            box.addView(a.text((if (ok) "[x] " else "[ ] ") + Targets.topicName(k) + "  (" + Syl.short(k.substringBefore('|')) + ")", 12.5f, 1, if (ok) T.textAccent(T.sage) else T.text), lp(-2, -2, 4))
+            val m = Pyq.micro(k)
+            val sc = Pyq.colorOf(k.substringBefore('|'))
+            val line = a.hbox()
+            line.background = T.round(T.withAlpha(sc, if (ok) 0.06f else 0.14f), 10)
+            line.padDp(8, 7, 8, 7)
+            line.addView(View(a).apply { background = T.round(sc, 3) }, LinearLayout.LayoutParams(T.dp(4), T.dp(26)))
+            val mid = a.vbox()
+            mid.addView(a.text((if (ok) "[done] " else "") + Targets.topicName(k), 12.5f, 2, if (ok) T.textAccent(T.sage) else T.text))
+            mid.addView(a.text(Syl.short(k.substringBefore('|')) + (m?.let { "  |  ${it.total} Q total  |  15y ${it.last15}  |  5y ${it.recent5}" } ?: ""), 10.5f, 1, T.text3), lp(-2, -2, 2))
+            line.addView(mid, lpm(0, -2, 8, 0, 6, 0, 1f))
+            if (m != null) line.addView(PyqUi.tierChip(a, m))
+            line.tap(false) { PyqUi.detail(a, k) }
+            box.addView(line, lp(-1, -2, 5))
         }
+        box.addView(a.text("Tap a topic to see every PYQ of it", 10.5f, 0, T.text3), lp(-2, -2, 6))
         val b = Dlg.builder(a).setTitle(t.title).setView(android.widget.ScrollView(a).apply { setPadding(T.dp(22), T.dp(8), T.dp(22), 0); addView(box) })
         b.setPositiveButton("Edit") { _, _ -> Targets.edit(a, t) { h.refresh() } }
         b.setNeutralButton("Calendar") { _, _ -> Targets.addToCalendar(a, t) }

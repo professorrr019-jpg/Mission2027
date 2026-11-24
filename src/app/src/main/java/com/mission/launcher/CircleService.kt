@@ -100,6 +100,16 @@ class CircleService : AccessibilityService() {
             if (s == null) need(c) else s.snap()
         }
 
+        /** Back / Home / Recents / Quick settings through the accessibility service. */
+        fun global(c: Context, action: Int): Boolean {
+            val s =
+                inst ?: run {
+                    need(c)
+                    return false
+                }
+            return s.performGlobalAction(action)
+        }
+
         fun lock(c: Context): Boolean {
             val s =
                 inst ?: run {

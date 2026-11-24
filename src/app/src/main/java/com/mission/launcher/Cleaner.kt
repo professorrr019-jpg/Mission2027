@@ -36,19 +36,21 @@ object Cleaner {
     }
 
     /** Returns how many apps were asked to stop. */
-    fun run(c: Context): Int {
-        if (!Usage.granted(c)) return 0
+    fun run(c: Context, idleOverride: Int? = null): Int {
+        if (idleOverride == null && !Usage.granted(c)) return 0
         var n = 0
         try {
             val now = System.currentTimeMillis()
-            val idle = Store.i("clean_idle", 30).coerceIn(10, 240) * 60000L
-            val usm = c.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
+            val idle = (idleOverride ?: Store.i("clean_idle", 30).coerceIn(10, 240)) * 60000L
             val last = HashMap<String, Long>()
-            usm.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, now - 24 * 3600000L, now)?.forEach {
-                if (it.lastTimeUsed > (last[it.packageName] ?: 0L)) last[it.packageName] = it.lastTimeUsed
+            if (idleOverride == null) {
+                val usm = c.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
+                usm.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, now - 24 * 3600000L, now)?.forEach {
+                    if (it.lastTimeUsed > (last[it.packageName] ?: 0L)) last[it.packageName] = it.lastTimeUsed
+                }
             }
             val keep = protectedPkgs(c)
-            val fg = Usage.foregroundPackage(c)
+            val fg = if (Usage.granted(c)) Usage.foregroundPackage(c) else null
             val am = c.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
             val pm = c.packageManager
             val pkgs = pm.queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0).map { it.activityInfo.packageName }.distinct()
