@@ -62,9 +62,12 @@ object FeatureRegistry {
     fun enabled(feature: Feature): Boolean =
         Store.b(feature.id, feature.defaultEnabled)
 
+    fun enabled(id: String): Boolean = Store.b(id, false)
+
     fun setEnabled(feature: Feature, enabled: Boolean) {
         Store.put(feature.id, enabled)
         Store.flushNow()
+        Store.changed()
     }
 
     fun mainsFeaturesEnabled(): Boolean =

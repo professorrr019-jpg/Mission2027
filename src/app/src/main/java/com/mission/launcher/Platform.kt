@@ -17,6 +17,7 @@ import android.view.WindowManager
 const val CH_WATER = "water_v2"
 const val CH_TIMER = "timer_v1"
 const val CH_INFO = "info_v1"
+const val CH_DIGEST = "digest_v1"
 
 object Boot {
     /** Safe to call from anywhere (activity, receiver, service). */
@@ -50,6 +51,14 @@ object Boot {
         if (nm.getNotificationChannel(CH_INFO) == null) {
             nm.createNotificationChannel(
                 NotificationChannel(CH_INFO, "Study updates", NotificationManager.IMPORTANCE_DEFAULT),
+            )
+        }
+        if (nm.getNotificationChannel(CH_DIGEST) == null) {
+            nm.createNotificationChannel(
+                NotificationChannel(CH_DIGEST, "Notification digest", NotificationManager.IMPORTANCE_DEFAULT).apply {
+                    description = "Periodic summaries of important notifications saved by Mission"
+                    lockscreenVisibility = Notification.VISIBILITY_PRIVATE
+                },
             )
         }
     }
@@ -315,7 +324,6 @@ class TickReceiver : BroadcastReceiver() {
                     return@Thread
                 }
                 Focus.finishIfDue(c)
-                Zite.sync(c)
                 Backup.auto(c)
                 Briefs.tick(c)
                 Water.arm(c)

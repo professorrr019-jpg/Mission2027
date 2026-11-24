@@ -162,8 +162,19 @@ object Cards {
         val box = c.vbox()
         box.padDp(4, 6, 4, 4)
         val row = c.hbox()
-        val clock = c.text("", 56f, 0, T.text).tabular()
-        clock.letterSpacing = -0.03f
+        val style = if (FeatureRegistry.enabled("x43_clock_styles")) Store.s("clock_style", "classic") else "classic"
+        val clock =
+            c.text(
+                "",
+                when (style) {
+                    "compact" -> 40f
+                    "bold" -> 62f
+                    else -> 56f
+                },
+                if (style == "bold") 3 else 0,
+                T.text,
+            ).tabular()
+        clock.letterSpacing = if (style == "compact") 0f else -0.03f
         row.addView(clock)
         row.addView(c.flex())
         row.addView(c.iconBtn("search") { h.openDrawer() }, lpm(-2, -2, 0, 0, 8, 0))
@@ -176,7 +187,8 @@ object Cards {
         box.whileAttached(15000) {
             val n = java.time.LocalDateTime.now(Repo.zone())
             clock.text = "%02d:%02d".format(n.hour, n.minute)
-            date.text = n.dayOfWeek.getDisplayName(TextStyle.FULL, Locale.ENGLISH) + ", " + n.dayOfMonth + " " + n.month.getDisplayName(TextStyle.FULL, Locale.ENGLISH) + "  -  " + greeting()
+            val dateStyle = if (style == "compact") TextStyle.SHORT else TextStyle.FULL
+            date.text = n.dayOfWeek.getDisplayName(dateStyle, Locale.ENGLISH) + ", " + n.dayOfMonth + " " + n.month.getDisplayName(dateStyle, Locale.ENGLISH) + "  -  " + greeting()
         }
         return box
     }

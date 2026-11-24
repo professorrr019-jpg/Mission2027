@@ -76,6 +76,7 @@ object TimerState {
         Store.put("timer_session_start", now)
         Store.put("timer_session_ms", 0L)
         Store.put("timer_auto_paused", false)
+        Store.put("timer_idle_paused", false)
         Store.put("pomo_done", 0)
     }
 
@@ -152,6 +153,7 @@ object TimerState {
         Store.put("timer_session_start", 0L)
         Store.put("timer_phase", "work")
         Store.put("timer_auto_paused", false)
+        Store.put("timer_idle_paused", false)
         Store.put("timer_topic", "")
         return TimerFinishResult(true, shouldSave, if (shouldSave) minutes else 0)
     }
@@ -190,6 +192,21 @@ class TimerService : Service() {
     private var lp: WindowManager.LayoutParams? = null
     private var expanded = false
     private var lastUsageCheck = 0L
+    private var distractedSince = 0L
+    private val screenReceiver =
+        object : android.content.BroadcastReceiver() {
+            override fun onReceive(c: Context, i: Intent) {
+                when (i.action) {
+                    Intent.ACTION_SCREEN_OFF -> {
+                        if (FeatureRegistry.enabled("x13_idle_detection") && TimerState.active() && TimerState.running()) {
+                            TimerState.pause()
+                            Store.put("timer_idle_paused", true)
+                        }
+                    }
+                    Intent.ACTION_SCREEN_ON, Intent.ACTION_USER_PRESENT -> resumeAfterIdle()
+                }
+            }
+        }
     private val tickR =
         object : Runnable {
             override fun run() {
@@ -204,6 +221,13 @@ class TimerService : Service() {
         super.onCreate()
         Boot.ensure(this)
         TimerState.recoverAfterRestart()
+        val filter =
+            android.content.IntentFilter().apply {
+                addAction(Intent.ACTION_SCREEN_OFF)
+                addAction(Intent.ACTION_SCREEN_ON)
+                addAction(Intent.ACTION_USER_PRESENT)
+            }
+        if (Build.VERSION.SDK_INT >= 33) registerReceiver(screenReceiver, filter, Context.RECEIVER_NOT_EXPORTED) else registerReceiver(screenReceiver, filter)
     }
 
     override fun onTimeout(startId: Int) {
@@ -228,6 +252,7 @@ class TimerService : Service() {
                 ACT_TOGGLE -> {
                     if (TimerState.running()) TimerState.pause() else TimerState.resume()
                     Store.put("timer_auto_paused", false)
+                    Store.put("timer_idle_paused", false)
                 }
                 ACT_STOP -> {
                     android.widget.Toast.makeText(this, TimerState.finish(true).message, android.widget.Toast.LENGTH_LONG).show()
@@ -361,6 +386,7 @@ class TimerService : Service() {
 
     private fun autoPauseIfNeeded() {
         if (!Store.b("timer_auto_pause", true) || !Usage.granted(this)) {
+            distractedSince = 0L
             if (Store.b("timer_auto_paused") && !TimerState.running()) {
                 TimerState.resume()
                 Store.put("timer_auto_paused", false)
@@ -371,11 +397,34 @@ class TimerService : Service() {
         val distracted = packageName != this.packageName && packageName in Usage.distraction()
         val isStudyApp = !distracted
         if (TimerState.running() && distracted) {
-            TimerState.pause()
-            Store.put("timer_auto_paused", true)
+            val graceMs = if (FeatureRegistry.enabled("x12_autopause_grace")) Store.i("autopause_grace_seconds", 10).coerceIn(0, 120) * 1000L else 0L
+            if (graceMs == 0L) {
+                TimerState.pause()
+                Store.put("timer_auto_paused", true)
+                distractedSince = 0L
+            } else if (distractedSince == 0L) {
+                distractedSince = android.os.SystemClock.elapsedRealtime()
+            } else if (android.os.SystemClock.elapsedRealtime() - distractedSince >= graceMs) {
+                TimerState.pause()
+                Store.put("timer_auto_paused", true)
+                distractedSince = 0L
+            }
         } else if (!TimerState.running() && Store.b("timer_auto_paused") && isStudyApp) {
             TimerState.resume()
             Store.put("timer_auto_paused", false)
+            distractedSince = 0L
+        } else if (!distracted) {
+            distractedSince = 0L
+        }
+    }
+
+    private fun resumeAfterIdle() {
+        if (!FeatureRegistry.enabled("x13_idle_detection") || !Store.b("timer_idle_paused") || !TimerState.active()) return
+        val power = getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
+        val keyguard = getSystemService(Context.KEYGUARD_SERVICE) as android.app.KeyguardManager
+        if (power.isInteractive && !keyguard.isKeyguardLocked) {
+            TimerState.resume()
+            Store.put("timer_idle_paused", false)
         }
     }
 
@@ -558,6 +607,11 @@ class TimerService : Service() {
 
     override fun onDestroy() {
         h.removeCallbacks(tickR)
+        try {
+            unregisterReceiver(screenReceiver)
+        } catch (e: IllegalArgumentException) {
+            Log.e("timer-screen-receiver", e)
+        }
         Overlay.remove(applicationContext, "timer")
         pill = null
         super.onDestroy()

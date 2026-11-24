@@ -314,8 +314,17 @@ object Zite {
         full: Boolean = false,
     ): String {
         if (!hasKey()) return "No Zite API key yet (Settings > Zite)"
-        if (syncing) return "Sync already running"
-        syncing = true
+        if (!c.online()) return "Offline; sync is queued until a network is available"
+        val acquired =
+            synchronized(this) {
+                if (syncing) {
+                    false
+                } else {
+                    syncing = true
+                    true
+                }
+            }
+        if (!acquired) return "Sync already running"
         errs.clear()
         val generation = Store.writeGeneration
         try {
@@ -486,7 +495,7 @@ object Zite {
             Store.putIfGeneration(generation, "zite_last_err", lastError)
             return "Sync failed: $lastError"
         } finally {
-            syncing = false
+            synchronized(this) { syncing = false }
         }
     }
 

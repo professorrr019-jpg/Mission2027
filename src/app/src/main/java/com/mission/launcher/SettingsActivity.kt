@@ -456,6 +456,7 @@ class SettingsActivity : Activity() {
     private fun LinearLayout.features() {
         label("Syllabus")
         group(sw("Show Mains", "Adds Mains-only subjects and answer-writing tools", "show_mains", false))
+        label("Launcher and focus features")
         val mainsOn = Store.b("show_mains", false)
         label("Working tools (tap to open)")
         val c = this@SettingsActivity
@@ -502,11 +503,123 @@ class SettingsActivity : Activity() {
         label("Planned (switch is saved but has no effect yet)")
         FeatureRegistry.features.filter { it.id !in open }.forEach { feature ->
             if (feature.id == "x03_answer_timer" && !mainsOn) return@forEach
+            if (feature.id == "x47_google_signin") {
+                if (FeatureRegistry.enabled(feature)) FeatureRegistry.setEnabled(feature, false)
+                group(
+                    action("login", T.slate, "Google sign-in setup", "OAuth project and account backend required") {
+                        Dlg.info(this@SettingsActivity, "Google sign-in is not configured", "A real sign-in needs a Google OAuth client ID and a defined account backend. This repository has neither. A device account picker would not authenticate a user or safely enable cloud sync, so Mission will not report a false signed-in state.")
+                    },
+                )
+                return@forEach
+            }
+            val description =
+                when (feature.id) {
+                    "x12_autopause_grace" -> "Wait briefly before auto-pausing when a distracting app opens"
+                    "x13_idle_detection" -> "Pause the timer when the screen locks; resume after unlock"
+                    "x18_voice_note" -> "Dictate notes with the device speech service; audio is not retained"
+                    "x20_notification_digest" -> "Summarize saved important alerts every six hours; notification access is required"
+                    "x32_home_presets" -> "Apply a built-in home layout or save and restore your own"
+                    "x34_keyboard_spotlight" -> "Press Search or type on a hardware keyboard to find apps"
+                    "x35_stylus_note" -> "Use the stylus barrel button on the home screen for a note"
+                    "x36_right_panel" -> "Open home shortcuts from the right edge"
+                    "x37_hot_corners" -> "Assign a launcher shortcut to any screen corner"
+                    "x38_wake_actions" -> "Run your configured double-tap action while the home screen is visible"
+                    "x40_app_lock" -> "Require the launcher PIN before opening selected apps from Mission"
+                    "x41_icon_pack" -> "Use classic appfilter.xml icon packs when available"
+                    "x43_clock_styles" -> "Change the home-screen clock; Android lock-screen styling is system-owned"
+                    else -> "Feature toggle · ${feature.id}"
+                }
             group(
-                sw(feature.title, "Planned feature · ${feature.id}", feature.id, feature.defaultEnabled) { enabled ->
+                sw(
+                    feature.title,
+                    description,
+                    feature.id,
+                    feature.defaultEnabled,
+                ) { enabled ->
                     FeatureRegistry.setEnabled(feature, enabled)
+                    if (feature.id == "x20_notification_digest") NotificationDigestWorker.setEnabled(this@SettingsActivity, enabled)
+                    if (feature.id == "x13_idle_detection" && !enabled && Store.b("timer_idle_paused")) {
+                        TimerState.resume()
+                        Store.put("timer_idle_paused", false)
+                    }
                 },
             )
+            when (feature.id) {
+                "x12_autopause_grace" ->
+                    group(
+                        num("Auto-pause grace", "autopause_grace_seconds", 10, 0, 120, "sec", "0 pauses immediately"),
+                    )
+                "x18_voice_note" ->
+                    group(
+                        action("mic", T.rose, "Create a voice note", "Dictate or type; only the transcript is saved") {
+                            startActivity(Intent(this@SettingsActivity, VoiceNoteActivity::class.java).putExtra("start_voice", true))
+                        },
+                    )
+                "x32_home_presets" ->
+                    group(
+                        action("layers", T.olive, "Apply home preset", Store.s("home_preset_custom_name", "My home")) {
+                            val options = HomePresets.names + listOf(Store.s("home_preset_custom_name", "My home"), "Save current as My home")
+                            Dlg.choose(this@SettingsActivity, "Home preset", options) { index ->
+                                when {
+                                    index < HomePresets.names.size -> HomePresets.apply(HomePresets.names[index])
+                                    index == HomePresets.names.size -> {
+                                        if (!HomePresets.applyCustom()) toast("Save a custom home layout first")
+                                    }
+                                    else -> {
+                                        HomePresets.saveCustom("My home")
+                                        toast("Current home saved")
+                                    }
+                                }
+                                redraw()
+                            }
+                        },
+                    )
+                "x37_hot_corners" ->
+                    group(
+                        *listOf("Top left", "Top right", "Bottom left", "Bottom right").mapIndexed { index, title ->
+                            choice(title, "hot_corner_$index", "none", Gestures.options)
+                        }.toTypedArray(),
+                    )
+                "x38_wake_actions" ->
+                    group(
+                        choice("Double tap action", "wake_action", Store.s("g_dtap", "lock"), Gestures.options),
+                    )
+                "x40_app_lock" -> {
+                    if (FeatureRegistry.enabled(feature)) {
+                        group(
+                            action("lock", T.plum, "Choose locked apps", "${Store.stringList("locked_apps").size} selected") {
+                                if (!Pin.isSet()) {
+                                    toast("Set a launcher PIN first")
+                                    startActivity(Intent(this@SettingsActivity, SettingsActivity::class.java).putExtra("path", "security"))
+                                } else {
+                                    multiPick("Lock apps from Mission", "locked_apps")
+                                }
+                            },
+                        )
+                        note("App lock protects launches started by Mission only. Android cannot prevent another launcher or an app's own deep link from opening the same app.")
+                    }
+                }
+                "x41_icon_pack" ->
+                    group(
+                        action("grid", T.slate, "Choose icon pack", Store.s("icon_pack").ifBlank { "System icons" }) {
+                            Apps.load(this@SettingsActivity) {
+                                val packs = IconPacks.available(this@SettingsActivity)
+                                val options = listOf("System icons") + packs.map { it.label }
+                                Dlg.choose(this@SettingsActivity, "Icon pack", options) { index ->
+                                    Store.put("icon_pack", packs.getOrNull(index - 1)?.packageName.orEmpty())
+                                    FeatureRegistry.setEnabled(feature, index > 0)
+                                    IconPacks.invalidate()
+                                    Apps.load(this@SettingsActivity) { Store.changed() }
+                                    redraw()
+                                }
+                            }
+                        },
+                    )
+                "x43_clock_styles" ->
+                    group(
+                        choice("Home clock style", "clock_style", "classic", listOf("classic" to "Classic", "compact" to "Compact", "bold" to "Bold")),
+                    )
+            }
         }
     }
 
@@ -569,7 +682,7 @@ class SettingsActivity : Activity() {
             },
         )
         note(
-            "This is a pull sync: it fetches syllabus, mocks, attempts, responses, and PYQs from your Zite database. Automatic refresh runs hourly while the phone is on; it is not a two-way or instant push sync.",
+            "This is a pull-only sync: syllabus, mocks, attempts, responses, and PYQs refresh in the background about every 15 minutes when connected (Android may defer work for battery). Manual sync is queued until a network is available. The current Zite API integration has no push endpoint, so it cannot provide instant or two-way account sync.",
         )
         if (Store.s("zite_last_err").isNotBlank()) {
             label("Last error")
@@ -982,6 +1095,18 @@ class SettingsActivity : Activity() {
             action("shield", T.sage, "Never clear these", "${Store.stringList("clean_keep").size} apps kept") { multiPick("Keep running", "clean_keep") },
         )
         note("Only background apps are stopped. Android or HyperOS may restart some of them. Telegram, WhatsApp, Flexcil, Gemini, music apps, keyboard and dialer are always kept.")
+        if (FeatureRegistry.enabled("x40_app_lock")) {
+            group(
+                action("lock", T.plum, "Locked apps", "${Store.stringList("locked_apps").size} protected from Mission") {
+                    if (!Pin.isSet()) {
+                        toast("Set a launcher PIN first")
+                        startActivity(Intent(this@SettingsActivity, SettingsActivity::class.java).putExtra("path", "security"))
+                    } else {
+                        multiPick("Lock apps from Mission", "locked_apps")
+                    }
+                },
+            )
+        }
         note("Recent apps are never shown on the home screen.")
     }
 

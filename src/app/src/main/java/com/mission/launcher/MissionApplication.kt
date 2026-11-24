@@ -14,9 +14,11 @@ import kotlin.system.exitProcess
 class MissionApplication : Application() {
     override fun onCreate() {
         super.onCreate()
+        Boot.ensure(this)
         installCrashLogger()
         Backdrop.ctx = applicationContext
         MissionSyncWorker.schedule(this)
+        NotificationDigestWorker.setEnabled(this, FeatureRegistry.enabled("x20_notification_digest"))
         if (BuildConfig.DEBUG) {
             StrictMode.setThreadPolicy(StrictMode.ThreadPolicy.Builder().detectAll().penaltyLog().build())
             StrictMode.setVmPolicy(StrictMode.VmPolicy.Builder().detectAll().penaltyLog().build())

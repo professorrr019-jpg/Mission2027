@@ -43,10 +43,49 @@ class Notifs : NotificationListenerService() {
             }
             if (s.packageName !in keep() || (t.isEmpty() && x.isEmpty())) return
             val rows = Store.rows("important")
-            if (rows.size > 40) Store.replace("important", rows.takeLast(20))
-            Store.add("important", obj("pkg" to s.packageName, "title" to t, "text" to x.take(140), "t" to System.currentTimeMillis()))
+            val existing = rows.lastOrNull { it.optString("key") == s.key }
+            if (existing != null) {
+                Store.update("important", existing.optString("id")) {
+                    it.put("pkg", s.packageName)
+                    it.put("title", t)
+                    it.put("text", x.take(140))
+                    it.put("t", System.currentTimeMillis())
+                    it.put("digest_sent", false)
+                }
+            } else {
+                if (rows.size >= 40) Store.replace("important", rows.takeLast(20))
+                Store.add("important", obj("key" to s.key, "pkg" to s.packageName, "title" to t, "text" to x.take(140), "t" to System.currentTimeMillis(), "digest_sent" to false))
+            }
         } catch (ex: Exception) {
             Log.e("notifs", ex)
+        }
+    }
+
+    fun postDigest(c: android.content.Context) {
+        if (!FeatureRegistry.enabled("x20_notification_digest")) return
+        if (!c.nm().areNotificationsEnabled() || c.nm().getNotificationChannel(CH_DIGEST)?.importance == android.app.NotificationManager.IMPORTANCE_NONE) return
+        val pending = Store.rows("important").filterNot { it.optBoolean("digest_sent", false) }
+        if (pending.isEmpty()) return
+        val latest = pending.takeLast(8)
+        val summary = latest.joinToString("\n") { "- " + it.optString("title").ifBlank { "Notification" }.take(72) }
+        val open = android.content.Intent(c, MainActivity::class.java)
+            .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        val pi = android.app.PendingIntent.getActivity(c, 7400, open, android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT)
+        c.nm().notify(
+            7400,
+            android.app.Notification.Builder(c, CH_DIGEST)
+                .setSmallIcon(android.R.drawable.ic_dialog_info)
+                .setContentTitle("${pending.size} important notifications")
+                .setContentText("Your notification digest is ready")
+                .setStyle(android.app.Notification.BigTextStyle().bigText(summary))
+                .setContentIntent(pi)
+                .setAutoCancel(true)
+                .setVisibility(android.app.Notification.VISIBILITY_PRIVATE)
+                .build(),
+        )
+        pending.forEach { row ->
+            val id = row.optString("id")
+            if (id.isNotBlank()) Store.update("important", id) { it.put("digest_sent", true) }
         }
     }
 }

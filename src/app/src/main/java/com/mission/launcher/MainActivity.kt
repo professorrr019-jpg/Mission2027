@@ -128,6 +128,8 @@ class MainActivity : Activity(), Host {
     private var gateView: View? = null
     private var editing = false
     private var edgeHandle: View? = null
+    private var rightHandle: View? = null
+    private var rightPanel: View? = null
     private val edgeHide =
         Runnable {
             edgeHandle?.let { h ->
@@ -308,6 +310,7 @@ class MainActivity : Activity(), Host {
         }
         ui.removeCallbacks(refreshRun)
         ui.removeCallbacks(edgeHide)
+        rightPanel?.let(root::removeView)
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -572,7 +575,10 @@ class MainActivity : Activity(), Host {
                     override fun onDown(e: MotionEvent) = true
 
                     override fun onDoubleTap(e: MotionEvent): Boolean {
-                        if (!editing) Gestures.run(this@MainActivity, Store.s("g_dtap", "lock"))
+                        if (!editing) {
+                            val action = if (FeatureRegistry.enabled("x38_wake_actions")) Store.s("wake_action", Store.s("g_dtap", "lock")) else Store.s("g_dtap", "lock")
+                            Gestures.run(this@MainActivity, action)
+                        }
                         return true
                     }
 
@@ -593,18 +599,51 @@ class MainActivity : Activity(), Host {
     private var dx0 = 0f
     private var dy0 = 0f
     private var topAtDown = false
+    private var hotCornerDown = -1
+
+    override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
+        if (FeatureRegistry.enabled("x34_keyboard_spotlight") && drawer == null && gateView == null && rightPanel == null && !editing && event.action == android.view.KeyEvent.ACTION_DOWN && event.repeatCount == 0 && currentFocus !is EditText) {
+            if (event.keyCode == android.view.KeyEvent.KEYCODE_SEARCH || event.keyCode == android.view.KeyEvent.KEYCODE_SLASH) {
+                openSpotlight("", true)
+                return true
+            }
+            val char = event.unicodeChar.toChar()
+            if (!event.isAltPressed && !event.isCtrlPressed && char.isLetterOrDigit()) {
+                openSpotlight(char.toString())
+                return true
+            }
+        }
+        return super.dispatchKeyEvent(event)
+    }
 
     override fun dispatchTouchEvent(e: MotionEvent): Boolean {
-        if (drawer == null && gateView == null && !editing) {
+        if (FeatureRegistry.enabled("x35_stylus_note") && e.actionMasked == MotionEvent.ACTION_BUTTON_PRESS && e.pointerCount > 0 &&
+            e.getToolType(0) == MotionEvent.TOOL_TYPE_STYLUS && e.buttonState and (MotionEvent.BUTTON_STYLUS_PRIMARY or MotionEvent.BUTTON_STYLUS_SECONDARY) != 0
+        ) {
+            startActivity(Intent(this, VoiceNoteActivity::class.java).putExtra("source", "stylus"))
+            return true
+        }
+        if (drawer == null && gateView == null && rightPanel == null && !editing) {
             when (e.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
                     dx0 = e.rawX
                     dy0 = e.rawY
                     topAtDown = (pager.getChildAt(pager.index) as? ScrollView)?.scrollY == 0
+                    hotCornerDown = if (FeatureRegistry.enabled("x37_hot_corners")) hotCornerAt(e.rawX, e.rawY) else -1
                 }
                 MotionEvent.ACTION_UP -> {
                     val dy = e.rawY - dy0
                     val dx = e.rawX - dx0
+                    val hotCornerUp = if (FeatureRegistry.enabled("x37_hot_corners")) hotCornerAt(e.rawX, e.rawY) else -1
+                    if (hotCornerDown >= 0 && hotCornerDown == hotCornerUp && kotlin.math.abs(dx) < T.dp(12) && kotlin.math.abs(dy) < T.dp(12)) {
+                        val corner = hotCornerDown
+                        hotCornerDown = -1
+                        val action = Store.s("hot_corner_$corner", "none")
+                        if (action != "none") {
+                            Gestures.run(this, action)
+                            return true
+                        }
+                    }
                     if (topAtDown && dy > T.dp(130) && dy > Math.abs(dx) * 1.8f && e.rawY - dy0 < resources.displayMetrics.heightPixels) {
                         topAtDown = false
                         Gestures.run(this, Store.s("g_down", "notif"))
@@ -613,6 +652,28 @@ class MainActivity : Activity(), Host {
             }
         }
         return super.dispatchTouchEvent(e)
+    }
+
+    private fun hotCornerAt(x: Float, y: Float): Int {
+        val edge = T.dp(42)
+        val width = resources.displayMetrics.widthPixels
+        val height = resources.displayMetrics.heightPixels
+        val left = x <= edge
+        val right = x >= width - edge
+        val top = y <= topInset + edge
+        val bottom = y >= height - botInset - edge
+        return when {
+            left && top -> 0
+            right && top -> 1
+            left && bottom -> 2
+            right && bottom -> 3
+            else -> -1
+        }
+    }
+
+    private fun openSpotlight(query: String, showKeyboard: Boolean = false) {
+        openDrawer()
+        drawer?.focusSearch(query, showKeyboard)
     }
 
     private fun cardView(id: String): View? {
@@ -1061,28 +1122,92 @@ class MainActivity : Activity(), Host {
     private fun updateEdgeHandle() {
         edgeHandle?.let { root.removeView(it) }
         edgeHandle = null
+        rightHandle?.let { root.removeView(it) }
+        rightHandle = null
         ui.removeCallbacks(edgeHide)
-        if (!Store.b("edge_handle", false)) return
+        if (Store.b("edge_handle", false)) {
+            val handle =
+                FrameLayout(this).apply {
+                    isClickable = true
+                    isFocusable = true
+                    contentDescription = "Open app drawer"
+                    val bar = View(this@MainActivity).apply { background = T.round(T.withAlpha(T.text2, 0.72f), 10) }
+                    addView(bar, FrameLayout.LayoutParams(T.dp(8), T.dp(48), Gravity.START or Gravity.CENTER_VERTICAL))
+                    setOnTouchListener { _, e ->
+                        if (e.actionMasked == MotionEvent.ACTION_DOWN) showEdgeHandle()
+                        false
+                    }
+                    setOnClickListener {
+                        ui.removeCallbacks(edgeHide)
+                        openDrawer()
+                    }
+                }
+            edgeHandle = handle
+            root.addView(handle, FrameLayout.LayoutParams(T.dp(24), T.dp(52), Gravity.START or Gravity.CENTER_VERTICAL))
+            showEdgeHandle()
+        }
+        if (FeatureRegistry.enabled("x36_right_panel")) {
+            val handle =
+                FrameLayout(this).apply {
+                    isClickable = true
+                    isFocusable = true
+                    contentDescription = "Open launcher control panel"
+                    val bar = View(this@MainActivity).apply { background = T.round(T.withAlpha(T.text2, 0.72f), 10) }
+                    addView(bar, FrameLayout.LayoutParams(T.dp(8), T.dp(48), Gravity.END or Gravity.CENTER_VERTICAL))
+                    setOnClickListener { openRightPanel() }
+                }
+            rightHandle = handle
+            root.addView(handle, FrameLayout.LayoutParams(T.dp(24), T.dp(56), Gravity.END or Gravity.CENTER_VERTICAL))
+        }
+    }
 
-        val handle =
+    private fun openRightPanel() {
+        if (drawer != null || gateView != null || editing || rightPanel != null) return
+        val overlay =
             FrameLayout(this).apply {
+                setBackgroundColor(0x55000000)
                 isClickable = true
-                isFocusable = true
-                contentDescription = "Open app drawer"
-                val bar = View(this@MainActivity).apply { background = T.round(T.withAlpha(T.text2, 0.72f), 10) }
-                addView(bar, FrameLayout.LayoutParams(T.dp(8), T.dp(48), Gravity.START or Gravity.CENTER_VERTICAL))
-                setOnTouchListener { _, e ->
-                    if (e.actionMasked == MotionEvent.ACTION_DOWN) showEdgeHandle()
-                    false
-                }
-                setOnClickListener {
-                    ui.removeCallbacks(edgeHide)
-                    openDrawer()
-                }
+                setOnClickListener { closeRightPanel() }
             }
-        edgeHandle = handle
-        root.addView(handle, FrameLayout.LayoutParams(T.dp(24), T.dp(52), Gravity.START or Gravity.CENTER_VERTICAL))
-        showEdgeHandle()
+        val panel =
+            vbox().apply {
+                background = T.round(T.cardSolid, 24)
+                padDp(16, 16, 16, 16)
+                isClickable = true
+                elevation = T.dpf(12f)
+                setOnClickListener { }
+            }
+        panel.addView(text("Quick controls", 18f, 3), lp(-1, -2, 10))
+        panel.addView(pill("Search apps", "search", false) { closeRightPanel(); openDrawer() }, lp(-1, -2, 6))
+        panel.addView(pill("Quick note", "note", false) { closeRightPanel(); startActivity(Intent(this, VoiceNoteActivity::class.java)) }, lp(-1, -2, 6))
+        panel.addView(
+            pill(if (TimerState.active()) "Stop study timer" else "Start study timer", "timer", true) {
+                if (TimerState.active()) {
+                    TimerState.finish(true)
+                    TimerService.stop(this)
+                } else {
+                    TimerState.start()
+                    TimerService.start(this)
+                }
+                closeRightPanel()
+            },
+            lp(-1, -2, 6),
+        )
+        panel.addView(pill("Settings", "gear", false) { closeRightPanel(); openSettings() }, lp(-1, -2, 6))
+        val width = minOf(T.dp(300), (resources.displayMetrics.widthPixels * 0.82f).toInt())
+        overlay.addView(
+            panel,
+            FrameLayout.LayoutParams(width, -2, Gravity.END or Gravity.CENTER_VERTICAL).apply {
+                rightMargin = T.dp(12)
+            },
+        )
+        rightPanel = overlay
+        root.addView(overlay, FrameLayout.LayoutParams(-1, -1))
+    }
+
+    private fun closeRightPanel() {
+        rightPanel?.let { root.removeView(it) }
+        rightPanel = null
     }
 
     private fun showEdgeHandle() {

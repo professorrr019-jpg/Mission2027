@@ -74,11 +74,12 @@ object Apps {
                 val out =
                     la.getActivityList(null, Process.myUserHandle()).filter { it.applicationInfo.packageName != c.packageName }
                         .map {
+                            val icon = it.getIcon(0)
                             AppEntry(
                                 it.label.toString(),
                                 it.applicationInfo.packageName,
                                 it.componentName,
-                                it.getIcon(0),
+                                IconPacks.icon(c, it.componentName, icon),
                             )
                         }.sortedBy { it.label.lowercase() }
                 list = out
@@ -109,7 +110,8 @@ object Apps {
             a.toast("Focus session running - ${Focus.left() / 60} min left")
             return
         }
-        Guard.check(a, pkg) { doLaunch(a, pkg, if (mode == "normal") Store.s("open_mode", "normal") else mode) }
+        val go = { Guard.check(a, pkg) { doLaunch(a, pkg, if (mode == "normal") Store.s("open_mode", "normal") else mode) } }
+        AppLock.require(a, pkg, go)
     }
 
     private fun doLaunch(
@@ -183,6 +185,26 @@ object Apps {
         try {
             a.startActivity(Intent(Intent.ACTION_DELETE, Uri.parse("package:$pkg")))
         } catch (e: Exception) {
+        }
+    }
+}
+
+object AppLock {
+    fun require(a: Activity, pkg: String, go: () -> Unit) {
+        if (!FeatureRegistry.enabled("x40_app_lock") || pkg !in Store.stringList("locked_apps")) {
+            go()
+            return
+        }
+        if (!Pin.isSet()) {
+            a.toast("Set a launcher PIN before locking apps")
+            return
+        }
+        if (Pin.unlocked()) {
+            go()
+        } else if (a is MainActivity) {
+            a.gate(go)
+        } else {
+            a.toast("Unlock the launcher before opening this app")
         }
     }
 }
@@ -454,6 +476,18 @@ class DrawerView(val a: Activity, val onClose: () -> Unit) : FrameLayout(a) {
         shown = l
         adapter.notifyDataSetChanged()
         universal()
+    }
+
+    fun focusSearch(query: String, showKeyboard: Boolean) {
+        search.setText(query)
+        search.setSelection(search.length())
+        search.requestFocus()
+        if (showKeyboard) {
+            search.post {
+                (a.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager)
+                    .showSoftInput(search, InputMethodManager.SHOW_IMPLICIT)
+            }
+        }
     }
 
     /** Notes, tasks and syllabus topics matching the query, shown above the apps. */

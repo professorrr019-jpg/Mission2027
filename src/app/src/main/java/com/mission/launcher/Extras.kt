@@ -15,7 +15,7 @@ import java.time.temporal.ChronoUnit
 /** Home gestures, each mappable in Settings > Gestures and multitasking. */
 object Gestures {
     val options =
-        listOf("none" to "Nothing", "lock" to "Lock screen", "notif" to "Notification shade", "drawer" to "App drawer", "circle" to "Circle to Search", "assistant" to "Assistant (Gemini / Hyper AI)", "edit" to "Edit home", "settings" to "Settings", "chat" to "Mission AI chat")
+        listOf("none" to "Nothing", "lock" to "Lock screen", "notif" to "Notification shade", "drawer" to "App drawer", "circle" to "Circle to Search", "assistant" to "Assistant (Gemini / Hyper AI)", "edit" to "Edit home", "settings" to "Settings", "chat" to "Mission AI chat", "note" to "Quick note")
 
     fun run(
         h: Host,
@@ -31,6 +31,7 @@ object Gestures {
             "edit" -> h.toggleEdit()
             "settings" -> h.openSettings()
             "chat" -> h.openChat()
+            "note" -> a.startActivity(Intent(a, VoiceNoteActivity::class.java))
         }
     }
 }
