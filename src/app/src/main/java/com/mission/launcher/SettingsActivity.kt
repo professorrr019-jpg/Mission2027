@@ -523,7 +523,7 @@ class SettingsActivity : Activity() {
             )
         val live = FeatureRegistry.features.filter { it.id in open }
         group(*live.map { f -> action("sparkle", T.sage, f.title, "Works now. Tap to open") { open[f.id]?.invoke() } }.toTypedArray())
-        label("Planned (switch is saved but has no effect yet)")
+        label("Switches")
         FeatureRegistry.features.filter { it.id !in open }.forEach { feature ->
             if (feature.id == "x03_answer_timer" && !mainsOn) return@forEach
             if (feature.id == "x47_google_signin") {
@@ -1884,6 +1884,12 @@ class SettingsActivity : Activity() {
             choice("Swipe up on dock", "g_up", "drawer", Gestures.options),
         )
         note("Lock screen and notification gestures use the accessibility service. Turn it on under Circle to Search.")
+        label("Full-screen gestures")
+        group(
+            sw("Edge swipe = Back", "Swipe in from the left or right edge, in any app, like the Redmi full-screen gesture. Needs the accessibility service", "edge_nav", true) { CircleService.inst?.updateEdges() },
+            sw("Bottom swipe = Home / Recents", "Swipe up from the bottom centre for Home, swipe up and hold for Recents", "edge_bottom", false) { CircleService.inst?.updateEdges() },
+        )
+        note("Android has no Forward action, so Back is the edge gesture. Turn on Mission under Accessibility (Circle to Search section) first.")
         label("Multitasking")
         group(
             choice(

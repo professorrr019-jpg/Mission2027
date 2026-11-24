@@ -124,6 +124,7 @@
         <receiver android:name=".TargetReceiver" android:exported="false"/>
         <receiver android:name=".AutoReceiver" android:exported="false"/>
         <receiver android:name=".CleanReceiver" android:exported="false"/>
+        <receiver android:name=".UpdateActionReceiver" android:exported="false"/>
         <receiver android:name=".UpdateReceiver" android:exported="false"/>
         <receiver android:name=".BootReceiver" android:exported="true">
             <intent-filter>

@@ -175,14 +175,22 @@ class ChatActivity : Activity() {
         bubble(true, q)
         val wait = bubble(false, "Thinking...")
         scroll.post { scroll.fullScroll(View.FOCUS_DOWN) }
+        // Only a weak reference to the screen is kept, so closing the chat never leaks it while the AI is thinking.
+        val app = applicationContext
+        val self = java.lang.ref.WeakReference(this)
         Thread {
             val r =
                 try {
-                    Ai.ask(this, q)
+                    Ai.ask(app, q)
                 } catch (e: Exception) {
                     "Error: " + (e.message ?: e.toString())
                 }
-            runOnUiThread {
+            val act = self.get()
+            if (act == null || act.isDestroyed) {
+                Store.changed()
+                return@Thread
+            }
+            act.runOnUiThread {
                 busy = false
                 wait.text = md(r)
                 wait.setTextColor(T.text)

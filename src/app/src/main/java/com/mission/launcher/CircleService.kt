@@ -144,6 +144,97 @@ class CircleService : AccessibilityService() {
             accessibilityButtonController.registerAccessibilityButtonCallback(btn)
         } catch (e: Throwable) {
         }
+        updateEdges()
+    }
+
+    // ---------------- edge swipe gestures (back from the left or right edge, optional bottom swipe) ----------------
+    private val edgeViews = ArrayList<View>()
+
+    fun removeEdges() {
+        val wm = getSystemService(Context.WINDOW_SERVICE) as WindowManager
+        edgeViews.forEach {
+            try {
+                wm.removeViewImmediate(it)
+            } catch (e: Exception) {
+            }
+        }
+        edgeViews.clear()
+    }
+
+    fun updateEdges() {
+        removeEdges()
+        if (!Store.b("edge_nav", true)) return
+        try {
+            val wm = getSystemService(Context.WINDOW_SERVICE) as WindowManager
+            val dm = resources.displayMetrics
+            val flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
+            for (left in listOf(true, false)) {
+                val v = View(this)
+                v.setOnTouchListener(sideSwipe(left))
+                val lp = WindowManager.LayoutParams(T.dp(18), (dm.heightPixels * 0.62f).toInt(), WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY, flags, PixelFormat.TRANSLUCENT)
+                lp.gravity = (if (left) Gravity.START else Gravity.END) or Gravity.CENTER_VERTICAL
+                wm.addView(v, lp)
+                edgeViews.add(v)
+            }
+            if (Store.b("edge_bottom", false)) {
+                val v = View(this)
+                v.setOnTouchListener(bottomSwipe())
+                val lp = WindowManager.LayoutParams((dm.widthPixels * 0.4f).toInt(), T.dp(14), WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY, flags, PixelFormat.TRANSLUCENT)
+                lp.gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
+                wm.addView(v, lp)
+                edgeViews.add(v)
+            }
+        } catch (e: Exception) {
+            Log.e("edges", e)
+        }
+    }
+
+    private fun sideSwipe(left: Boolean): View.OnTouchListener {
+        var x0 = 0f
+        var y0 = 0f
+        var fired = false
+        return View.OnTouchListener { v, e ->
+            when (e.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    x0 = e.rawX
+                    y0 = e.rawY
+                    fired = false
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    val dx = (if (left) e.rawX - x0 else x0 - e.rawX)
+                    if (!fired && dx > T.dp(56) && dx > Math.abs(e.rawY - y0) * 1.2f) {
+                        fired = true
+                        v.performHapticFeedback(android.view.HapticFeedbackConstants.CONFIRM)
+                        performGlobalAction(GLOBAL_ACTION_BACK)
+                    }
+                }
+            }
+            true
+        }
+    }
+
+    private fun bottomSwipe(): View.OnTouchListener {
+        var y0 = 0f
+        var t0 = 0L
+        var fired = false
+        return View.OnTouchListener { v, e ->
+            when (e.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    y0 = e.rawY
+                    t0 = System.currentTimeMillis()
+                    fired = false
+                }
+                MotionEvent.ACTION_UP -> {
+                    val up = y0 - e.rawY
+                    if (!fired && up > T.dp(60)) {
+                        fired = true
+                        v.performHapticFeedback(android.view.HapticFeedbackConstants.CONFIRM)
+                        performGlobalAction(if (System.currentTimeMillis() - t0 > 450) GLOBAL_ACTION_RECENTS else GLOBAL_ACTION_HOME)
+                    }
+                }
+            }
+            true
+        }
     }
 
     override fun onAccessibilityEvent(e: AccessibilityEvent?) {
@@ -157,6 +248,7 @@ class CircleService : AccessibilityService() {
 
     override fun onUnbind(i: Intent?): Boolean {
         inst = null
+        removeEdges()
         closeOverlay()
         return super.onUnbind(i)
     }

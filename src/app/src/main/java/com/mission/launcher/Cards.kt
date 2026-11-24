@@ -184,6 +184,12 @@ object Cards {
         box.addView(row)
         val date = c.text("", 15f, 1, T.text2)
         box.addView(date, lp(-2, -2, 2))
+        if (Store.l("update_avail", 0L) > 0L) {
+            box.addView(
+                c.pill("New build ready - tap to install", "up", true, T.sage) { c.startActivity(Intent(c, SettingsActivity::class.java).putExtra("path", "about")) },
+                lp(-2, -2, 6),
+            )
+        }
         box.whileAttached(15000) {
             val n = java.time.LocalDateTime.now(Repo.zone())
             clock.text = "%02d:%02d".format(n.hour, n.minute)

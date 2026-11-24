@@ -19,6 +19,11 @@ class MissionSyncWorker(
     override suspend fun doWork(): Result {
         return try {
             Boot.ensure(applicationContext)
+            try {
+                Updater.backgroundCheck(applicationContext)
+            } catch (e: Exception) {
+                Log.e("update-worker", e)
+            }
             if (!Zite.hasKey()) return Result.success()
             val result = Zite.sync(applicationContext, full = false)
             if (result.startsWith("Synced") || result.contains("snapshot", ignoreCase = true)) {

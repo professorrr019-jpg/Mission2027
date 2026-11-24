@@ -72,9 +72,9 @@ object Updater {
     }
 
     /** Called by the half-hour tick: look at most every 6 hours and tell the user once. */
-    fun backgroundCheck(c: Context) {
+    fun backgroundCheck(c: Context, minGapMin: Int = 14) {
         if (!Store.b("update_auto", true)) return
-        if (System.currentTimeMillis() - Store.l("update_checked", 0L) < 6 * 3600000L) return
+        if (System.currentTimeMillis() - Store.l("update_checked", 0L) < minGapMin * 60000L) return
         val info = check(c)
         Store.put("update_checked", System.currentTimeMillis())
         if (info == null) {
@@ -92,10 +92,12 @@ object Updater {
         Store.put("update_avail", info.at)
         try {
             val pi = PendingIntent.getActivity(c, 4300, Intent(c, SettingsActivity::class.java).putExtra("path", "about").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+            val act = PendingIntent.getBroadcast(c, 4303, Intent(c, UpdateActionReceiver::class.java).setPackage(c.packageName), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
             c.nm().notify(
                 4300,
-                Notification.Builder(c, CH_INFO).setSmallIcon(android.R.drawable.stat_sys_download_done).setContentTitle("Mission update available")
-                    .setContentText("Open Settings > About to install the new build").setContentIntent(pi).setAutoCancel(true).build(),
+                Notification.Builder(c, CH_INFO).setSmallIcon(android.R.drawable.stat_sys_download_done).setContentTitle("New Mission build is ready")
+                    .setContentText("Tap Install now, or open Settings > About").setContentIntent(pi).setAutoCancel(true)
+                    .addAction(Notification.Action.Builder(null, "Install now", act).build()).build(),
             )
         } catch (e: Exception) {
             Log.e("update-notify", e)
@@ -197,5 +199,30 @@ class UpdateReceiver : BroadcastReceiver() {
                 android.widget.Toast.makeText(c, "Update: $m (a different signing key needs one reinstall)", android.widget.Toast.LENGTH_LONG).show()
             }
         }
+    }
+}
+
+/** "Install now" button of the update notification: downloads the new build and installs it. */
+class UpdateActionReceiver : BroadcastReceiver() {
+    override fun onReceive(
+        c: Context,
+        i: Intent,
+    ) {
+        val pr = goAsync()
+        Thread {
+            try {
+                val info = Updater.check(c)
+                if (info == null) {
+                    android.os.Handler(android.os.Looper.getMainLooper()).post { android.widget.Toast.makeText(c, "Already on the latest build", android.widget.Toast.LENGTH_SHORT).show() }
+                } else {
+                    c.nm().cancel(4300)
+                    Updater.install(c, info) { m -> android.os.Handler(android.os.Looper.getMainLooper()).post { android.widget.Toast.makeText(c, m, android.widget.Toast.LENGTH_SHORT).show() } }
+                }
+            } catch (e: Exception) {
+                Log.e("update-action", e)
+            } finally {
+                pr.finish()
+            }
+        }.start()
     }
 }
