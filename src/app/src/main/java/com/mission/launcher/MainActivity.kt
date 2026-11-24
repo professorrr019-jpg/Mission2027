@@ -232,8 +232,7 @@ class MainActivity : Activity(), Host {
         dock =
             LinearLayout(this).apply {
                 gravity = Gravity.CENTER
-                background = T.round(T.card, 18)
-                T.elevate(this, 4, 18)
+                background = glassDock()
                 padDp(8, 5, 8, 5)
             }
         content.addView(dock, FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL))
@@ -353,6 +352,15 @@ class MainActivity : Activity(), Host {
     }
 
     /** Hides the system navigation bar / gesture pill on home; a swipe from the bottom edge shows it briefly. */
+    /** Translucent "glass" dock: see-through fill, hairline light border, no heavy shadow. */
+    private fun glassDock() =
+        T.round(
+            (T.card and 0x00FFFFFF) or ((Store.i("dock_alpha", 45).coerceIn(10, 100) * 255 / 100) shl 24),
+            20,
+            1,
+            if (T.dark) 0x33FFFFFF else 0x66FFFFFF,
+        )
+
     private fun hideNav() {
         try {
             val ic = window.insetsController ?: return
@@ -375,6 +383,7 @@ class MainActivity : Activity(), Host {
     override fun onResume() {
         super.onResume()
         hideNav()
+        if (::dock.isInitialized) dock.background = glassDock()
         val was = T.dark
         T.init(applicationContext)
         if (was != T.dark) {
@@ -1134,6 +1143,7 @@ class MainActivity : Activity(), Host {
                 ImageView(this).apply {
                     scaleType = ImageView.ScaleType.FIT_CENTER
                     setImageDrawable(e.icon.constantState?.newDrawable()?.mutate() ?: e.icon)
+                    pressScale()
                     setOnClickListener { Apps.launch(this@MainActivity, e.pkg) }
                     setOnLongClickListener {
                         Dlg.choose(

@@ -854,3 +854,16 @@ fun android.app.Activity.systemBars(bg: Int? = null) {
 fun Context.toast(s: String) = Toast.makeText(this, s, Toast.LENGTH_SHORT).show()
 
 fun fmtMins(m: Int): String = if (m < 60) "${m}m" else "${m / 60}h ${"%02d".format(m % 60)}m"
+
+/** iOS style press feedback: the view shrinks a little while touched and springs back. Does not consume the touch. */
+@android.annotation.SuppressLint("ClickableViewAccessibility")
+fun View.pressScale(to: Float = 0.9f) {
+    setOnTouchListener { v, e ->
+        when (e.actionMasked) {
+            android.view.MotionEvent.ACTION_DOWN -> v.animate().scaleX(to).scaleY(to).setDuration(90).start()
+            android.view.MotionEvent.ACTION_UP, android.view.MotionEvent.ACTION_CANCEL ->
+                v.animate().scaleX(1f).scaleY(1f).setDuration(260).setInterpolator(android.view.animation.OvershootInterpolator(2.2f)).start()
+        }
+        false
+    }
+}

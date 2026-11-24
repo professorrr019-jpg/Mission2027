@@ -1021,7 +1021,8 @@ class SettingsActivity : Activity() {
                 listOf("online" to "Real photos (online, free)", "sangam" to "Prayagraj Sangam (4K, live)", "hills" to "Misty hills", "dunes" to "Soft dunes", "forest" to "Pine forest", "ocean" to "Ocean horizon", "waves" to "Calm waves", "gradient" to "Aurora gradient", "paper" to "Warm paper", "amoled" to "Pure dark (OLED)", "photo" to "My photos"),
             ) {
             },
-            choice("Photo source", "online_src", "wiki", listOf("wiki" to "Wikimedia Commons: Prayagraj photos", "bing" to "Bing photo of the day (India)", "apod" to "NASA astronomy picture of the day")),
+            choice("Photo source", "online_src", "wiki", listOf("wiki" to "Wikimedia Commons: Prayagraj photos", "bing" to "Bing photo of the day (India)", "apod" to "NASA astronomy picture of the day", "picsum" to "Lorem Picsum: free nature and city photos")),
+            sw("Edge sharpening", "Detects edges and sharpens only them, so photos look crisper (8K feel)", "wp_sharpen", true) { Wallpaper.apply(this@SettingsActivity, true) },
             secret("NASA API key (optional)", { SecureStore.get("nasa") }, { SecureStore.put("nasa", it) }, "Free at api.nasa.gov, removes the shared DEMO_KEY limit"),
             action("refresh", T.teal, "Download photos now", if (Online.credit().isBlank()) "Needs internet. ${Online.files(this@SettingsActivity).size} saved" else Online.credit()) {
                 toast("Downloading...")
@@ -1217,6 +1218,7 @@ class SettingsActivity : Activity() {
                 88,
                 "dp",
             ),
+            num("Dock opacity", "dock_alpha", 45, 10, 100, "%", "Lower is more transparent (glass look)"),
             num("Pinned app icon size", "dock_icon", 15, 10, 72, "dp"), sw("Drawer app names", null, "drawer_labels", true),
             slider("Text size", "text_scale", 100, 130, min = 80) {
                 T.init(c.applicationContext)

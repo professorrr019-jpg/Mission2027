@@ -119,6 +119,18 @@ object Online {
         }
     }
 
+    private fun picsum(c: Context): Int {
+        // Lorem Picsum: free, no key, random landscape photos by Unsplash photographers, one set per day
+        var got = 0
+        val day = TimeProvider.today().toString()
+        for (i in 0 until 4) {
+            val name = "pics_$day-$i"
+            if (File(dir(c), "$name.jpg").exists() || save(c, "https://picsum.photos/seed/mission-$day-$i/2880/1800.jpg", name)) got++
+        }
+        if (got > 0) Store.put("online_credit", "Lorem Picsum - photos by Unsplash photographers (free licence)")
+        return got
+    }
+
     /** Download new photos in the background (max once per 12 h unless [force]). Old files beyond 12 are removed. */
     fun refreshAsync(c0: Context, force: Boolean = false, done: ((Int) -> Unit)? = null) {
         val c = c0.applicationContext
@@ -132,6 +144,7 @@ object Online {
                     when (Store.s("online_src", "wiki")) {
                         "bing" -> bing(c)
                         "apod" -> apod(c)
+                        "picsum" -> picsum(c)
                         else -> wiki(c)
                     }
                 files(c).drop(12).forEach { it.delete() }
@@ -145,6 +158,9 @@ object Online {
         }.start()
     }
 
+    private var sharpKey = ""
+    private var sharpBmp: Bitmap? = null
+
     /** Today's photo, cover-decoded to about w x h. */
     fun decode(c: Context, w: Int, h: Int): Bitmap? {
         val list = files(c).filter { it.name.startsWith(Store.s("online_src", "wiki").take(4)) }.ifEmpty { files(c) }
@@ -155,7 +171,14 @@ object Online {
             BitmapFactory.decodeFile(f.path, b)
             var ss = 1
             while (b.outWidth / (ss * 2) >= w && b.outHeight / (ss * 2) >= h) ss *= 2
-            BitmapFactory.decodeFile(f.path, BitmapFactory.Options().apply { inSampleSize = ss })
+            val key = f.path + "@" + ss
+            if (key == sharpKey && sharpBmp != null && !sharpBmp!!.isRecycled) return sharpBmp
+            val raw = BitmapFactory.decodeFile(f.path, BitmapFactory.Options().apply { inSampleSize = ss }) ?: return null
+            val out = if (Store.b("wp_sharpen", true)) Sharpen.edges(raw, 0.55f) else raw
+            if (out !== raw) raw.recycle()
+            sharpKey = key
+            sharpBmp = out
+            out
         } catch (e: Throwable) {
             null
         }
