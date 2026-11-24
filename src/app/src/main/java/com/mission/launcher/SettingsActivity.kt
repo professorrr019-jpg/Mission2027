@@ -1205,8 +1205,7 @@ class SettingsActivity : Activity() {
                 88,
                 "dp",
             ),
-            note0("Pinned app icons are fixed at 25 dp for a consistent iOS-style dock."),
-            sw("Drawer app names", null, "drawer_labels", true),
+            num("Pinned app icon size", "dock_icon", 15, 10, 72, "dp"), sw("Drawer app names", null, "drawer_labels", true),
             slider("Text size", "text_scale", 100, 130, min = 80) {
                 T.init(c.applicationContext)
                 recreate()
