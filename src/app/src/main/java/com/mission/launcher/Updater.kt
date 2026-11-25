@@ -27,7 +27,35 @@ object Updater {
     /** GitHub "owner/name" that publishes the APK. Changeable in Settings > About if you move to a new repo. */
     fun repo(): String = Store.s("update_repo", DEFAULT_REPO).trim().ifBlank { DEFAULT_REPO }
 
-    class Info(val url: String, val size: Long, val at: Long, val name: String)
+    class Info(val url: String, val size: Long, val at: Long, val name: String, val notes: String = "", val build: Int = 0)
+
+    /** Release notes text without the first "Debug build N" line: just the list of changes. */
+    private fun cleanNotes(body: String): String =
+        body.lines().map { it.trim() }.filter { it.startsWith("-") }.joinToString("\n") { "\u2022 " + it.removePrefix("-").trim() }
+
+    /** Shows what changed in the new build (like an app store) and installs only when the user agrees. */
+    fun offer(a: Activity, info: Info, say: (String) -> Unit) {
+        val mb = String.format("%.1f", info.size / 1048576.0)
+        val cached = cachedFile(a, info)?.exists() == true
+        val msg = "Build " + (info.build + 100).coerceAtLeast(0) + "  |  " + mb + " MB" + (if (cached) "  |  already downloaded" else "") + "\n\nWhat's new\n" + info.notes.ifBlank { "Improvements and fixes." } + "\n\nYour data, targets and settings stay as they are."
+        Dlg.confirm(a, "Update available", msg, "Update") { install(a, info, say) }
+    }
+
+    private fun cachedFile(c: Context, info: Info): File? = if (info.build > 0 && info.size > 0) File(c.cacheDir, "update-" + info.build + ".apk") else null
+
+    /** Notes of the build that was just installed, shown once after the update and kept in Settings > About. */
+    fun lastNotes(): String = Store.s("update_last_notes")
+
+    fun showJustUpdated(a: Activity) {
+        try {
+            val vc = a.packageManager.getPackageInfo(a.packageName, 0).longVersionCode
+            if (Store.l("seen_vc", 0L) == vc) return
+            Store.put("seen_vc", vc)
+            if (Store.l("update_last_vc", 0L) == vc && lastNotes().isNotBlank()) Dlg.info(a, "Updated to build " + (vc - 100), "What changed\n" + lastNotes())
+        } catch (e: Exception) {
+            Log.e("just-updated", e)
+        }
+    }
 
     private fun installedAt(c: Context): Long =
         try {
@@ -61,7 +89,7 @@ object Updater {
             if (bn != null) {
                 Store.put("update_checked", System.currentTimeMillis())
                 val installed = try { c.packageManager.getPackageInfo(c.packageName, 0).longVersionCode } catch (e: Exception) { 0L }
-                return if (bn + 100L > installed) Info(a.optString("browser_download_url"), a.optLong("size"), at, a.optString("name")) else null
+                return if (bn + 100L > installed) Info(a.optString("browser_download_url"), a.optLong("size"), at, a.optString("name"), cleanNotes(j.optString("body")), bn) else null
             }
             Store.put("update_checked", System.currentTimeMillis())
             if (at > installedAt(c) + 3 * 60000L) Info(a.optString("browser_download_url"), a.optLong("size"), at, a.optString("name")) else null
@@ -117,30 +145,17 @@ object Updater {
             false
         }
 
-    fun install(
-        a: Context,
-        info: Info,
-        say: (String) -> Unit,
-    ) {
-        if (!a.packageManager.canRequestPackageInstalls()) {
-            say("Allow 'Install unknown apps' for Mission, then tap update again")
-            try {
-                a.startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:" + a.packageName)))
-            } catch (e: Exception) { Log.e("updater", e) }
-            return
-        }
-        Thread {
-            try {
-                val f = File(a.cacheDir, "update.apk")
-                val cn = URL(info.url).openConnection() as HttpURLConnection
-                cn.connectTimeout = 15000
-                cn.readTimeout = 30000
-                cn.instanceFollowRedirects = true
+    private fun downloadTo(a: Context, info: Info, f: File, say: (String) -> Unit) {
+        val part = File(f.path + ".part")
+        val cn = URL(info.url).openConnection() as HttpURLConnection
+        cn.connectTimeout = 15000
+        cn.readTimeout = 30000
+        cn.instanceFollowRedirects = true
                 val total = cn.contentLengthLong.takeIf { it > 0 } ?: info.size
                 var got = 0L
                 var lastSay = 0L
                 cn.inputStream.use { ins ->
-                    f.outputStream().use { out ->
+                    part.outputStream().use { out ->
                         val buf = ByteArray(64 * 1024)
                         while (true) {
                             val n = ins.read(buf)
@@ -155,6 +170,29 @@ object Updater {
                         }
                     }
                 }
+        part.renameTo(f)
+    }
+
+    fun install(
+        a: Context,
+        info: Info,
+        say: (String) -> Unit,
+    ) {
+        if (!a.packageManager.canRequestPackageInstalls()) {
+            say("Allow 'Install unknown apps' for Mission, then tap update again")
+            try {
+                a.startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:" + a.packageName)))
+            } catch (e: Exception) { Log.e("updater", e) }
+            return
+        }
+        Thread {
+            try {
+                Store.put("update_last_notes", info.notes)
+                Store.put("update_last_vc", info.build + 100L)
+                val f = cachedFile(a, info) ?: File(a.cacheDir, "update.apk")
+                a.cacheDir.listFiles()?.filter { it.name.startsWith("update") && it.name.endsWith(".apk") && it != f }?.forEach { it.delete() }
+                val have = f.exists() && info.size > 0 && f.length() == info.size
+                if (!have) downloadTo(a, info, f, say)
                 ui(a) { say("Installing...") }
                 val pi = a.packageManager.packageInstaller
                 val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL)

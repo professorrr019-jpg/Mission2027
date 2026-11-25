@@ -1775,9 +1775,7 @@ object Cards {
                         if (info == null) {
                             c.toast("You have the latest build (or no internet)")
                         } else {
-                            Dlg.confirm(c, "Update available", "New build: " + info.name + " (" + info.size / 1048576 + " MB). Your data stays.", "Install") {
-                                Updater.install(h.act, info) { m -> c.toast(m) }
-                            }
+                            Updater.offer(h.act, info) { m -> c.toast(m) }
                         }
                     }
                 }.start()

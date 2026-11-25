@@ -395,6 +395,7 @@ class MainActivity : Activity(), Host {
             }.start()
         }
         if (Focus.active()) Focus.finishIfDue(this)
+        Updater.showJustUpdated(this)
         if (online()) Thread { try { Updater.backgroundCheck(applicationContext, 10) } catch (e: Exception) { Log.e("update-resume", e) } }.start()
         if (Store.b("pin_home") && Pin.isSet() && !Pin.unlocked()) gate { }
         scheduleRefresh(150)

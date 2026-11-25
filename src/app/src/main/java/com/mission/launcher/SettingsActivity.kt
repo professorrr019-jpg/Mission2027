@@ -1621,6 +1621,9 @@ class SettingsActivity : Activity() {
                     ""
                 },
             ) { },
+            action("info", T.sage, "What changed in this build", "Notes of the last update you installed") {
+                Dlg.info(c, "What changed", Updater.lastNotes().ifBlank { "No notes saved yet. They appear after your next update." })
+            },
             sw("Update by itself at night", "Installs new builds between 12 and 6 am on Wi-Fi (needs Install unknown apps)", "update_silent", true),
             action("link", T.slate, "Update source repo", Updater.repo()) {
                 Dlg.input(c, "GitHub repo (owner/name)", "e.g. sure1234-del/Home-launcher-", Updater.repo()) { v ->
@@ -1641,9 +1644,7 @@ class SettingsActivity : Activity() {
                         if (info == null) {
                             toast("You have the latest build (or no internet)")
                         } else {
-                            Dlg.confirm(c, "Update available", "New build: " + info.name + " (" + info.size / 1048576 + " MB). Your data stays.", "Install") {
-                                Updater.install(c, info) { m -> toast(m) }
-                            }
+                            Updater.offer(this@SettingsActivity, info) { m -> toast(m) }
                         }
                     }
                 }.start()
