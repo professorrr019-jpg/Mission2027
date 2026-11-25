@@ -846,6 +846,7 @@ class SettingsActivity : Activity() {
         label("Strict study slot")
         group(
             sw("Strict focus during a slot", "While a target's study slot is open only study apps and pinned apps work. Needs the accessibility service (Circle to Search section)", "strict_slot", true),
+            sw("Strict focus while a timer runs", "Study timer ON = only study apps, pinned apps and Gemini/Lens work. Mock test break and emergency code can pause it", "strict_timer", true),
             num("Emergency unlock time", "strict_unlock_min", 15, 5, 60, "min", "Typing the random 15 character code unlocks for this long"),
         )
         note("Settings and every other app are blocked in the slot. Add your study apps in Study apps, and pin the ones you need on the dock.")
@@ -1022,7 +1023,7 @@ class SettingsActivity : Activity() {
             ) {
             },
             choice("Photo source", "online_src", "wiki", listOf("wiki" to "Wikimedia Commons: Prayagraj photos", "bing" to "Bing photo of the day (India)", "apod" to "NASA astronomy picture of the day", "picsum" to "Lorem Picsum: free nature and city photos")),
-            sw("Edge sharpening", "Detects edges and sharpens only them, so photos look crisper (8K feel)", "wp_sharpen", true) { Wallpaper.apply(this@SettingsActivity, true) },
+            sw("Edge sharpening", "Detects edges and sharpens only them, so photos look crisper (8K feel)", "wp_sharpen", true) { Wallpaper.applyAsync(this@SettingsActivity, true) },
             secret("NASA API key (optional)", { SecureStore.get("nasa") }, { SecureStore.put("nasa", it) }, "Free at api.nasa.gov, removes the shared DEMO_KEY limit"),
             action("refresh", T.teal, "Download photos now", if (Online.credit().isBlank()) "Needs internet. ${Online.files(this@SettingsActivity).size} saved" else Online.credit()) {
                 toast("Downloading...")
@@ -1896,6 +1897,7 @@ class SettingsActivity : Activity() {
         note("Android has no Forward action, so Back is the edge gesture. Turn on Mission under Accessibility (Circle to Search section) first.")
         label("Multitasking")
         group(
+            choice("Split view style", "split_mode", "split", listOf("split" to "Real split screen (needs accessibility)", "float" to "Two small floating windows")),
             choice(
                 "Open apps from drawer in",
                 "open_mode",
@@ -1927,13 +1929,13 @@ class SettingsActivity : Activity() {
             choice(
                 "Where the circled area goes",
                 "circle_target",
-                "gemini",
-                listOf("gemini" to "Gemini app (floating, UPSC Prelims 2027 tag)", "ask" to "Ask me every time (Gemini, Lens, share)"),
+                "lens",
+                listOf("lens" to "Google Lens (floating, UPSC Prelims 2027 tag, auto search)", "gemini" to "Gemini app (floating, UPSC Prelims 2027 tag)", "ask" to "Ask me every time (Gemini, Lens, share)"),
             ),
-            sw("Floating Gemini window", "Small window on the right so your notes stay visible", "circle_float", true),
+            sw("Floating Lens / Gemini window", "Small window on the right so your notes stay visible", "circle_float", true),
             num("Floating window width", "circle_w", 42, 30, 70, "%"),
             num("Floating window height", "circle_h", 62, 40, 90, "%"),
-            sw("Press Send automatically", "Needs the accessibility service; Gemini starts searching at once", "circle_autosend", true),
+            sw("Search automatically", "Needs the accessibility service; Lens types the tag and searches, Gemini presses Send", "circle_autosend", true),
             sw("Add 'UPSC Prelims 2027' tag", "Sent with every circled image so answers are exam focused", "circle_tag", true),
             value("Prompt sent with the image", null, CircleService.geminiPrompt().take(60) + "...") {
                 Dlg.input(c, "Prompt", "Leave empty for the default", Store.s("circle_prompt"), multi = true) { v ->

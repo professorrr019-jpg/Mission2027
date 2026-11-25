@@ -174,7 +174,7 @@ object Online {
             val key = f.path + "@" + ss
             if (key == sharpKey && sharpBmp != null && !sharpBmp!!.isRecycled) return sharpBmp
             val raw = BitmapFactory.decodeFile(f.path, BitmapFactory.Options().apply { inSampleSize = ss }) ?: return null
-            val out = if (Store.b("wp_sharpen", true)) Sharpen.edges(raw, 0.55f) else raw
+            val out = if (Store.b("wp_sharpen", true)) Sharpen.edges(raw, 0.45f) else raw
             if (out !== raw) raw.recycle()
             sharpKey = key
             sharpBmp = out

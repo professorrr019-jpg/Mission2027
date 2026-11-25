@@ -214,9 +214,30 @@ object Targets {
         val endBtn = a.pill("Finish by: $end", "calendar") { }
         val minBtn = a.pill("Daily: " + fmtMins(mins), "timer") { }
         val atBtn = a.pill("Reminder: " + "%02d:%02d".format(at.hour, at.minute), "bell") { }
+        fun endClock(): String = at.plusMinutes(mins.toLong()).let { "%02d:%02d".format(it.hour, it.minute) }
+        val slotEndBtn = a.pill("Slot ends: " + endClock(), "clock") { }
         box.addView(endBtn, lp(-2, -2, 8))
-        box.addView(minBtn, lp(-2, -2, 8))
         box.addView(atBtn, lp(-2, -2, 8))
+        box.addView(slotEndBtn, lp(-2, -2, 8))
+        box.addView(minBtn, lp(-2, -2, 8))
+        val slotInfo = a.text("", 11.5f, 2, T.textAccent(T.sage))
+        box.addView(slotInfo, lp(-2, -2, 6))
+        fun refreshSlot() {
+            (slotEndBtn.getChildAt(2) as? android.widget.TextView)?.text = "Slot ends: " + endClock()
+            val cl = clash(at, mins, existing?.id)
+            slotInfo.text = if (cl == null) "Slot ${"%02d:%02d".format(at.hour, at.minute)} - ${endClock()} is free and will be booked daily" else "Clashes with '${cl.title}' (${"%02d:%02d".format(cl.at.hour, cl.at.minute)} - ${cl.at.plusMinutes(cl.mins.toLong()).let { "%02d:%02d".format(it.hour, it.minute) }}). Next free start: ${nextFree(mins, existing?.id)}"
+            slotInfo.setTextColor(if (cl == null) T.textAccent(T.sage) else T.textAccent(T.danger))
+        }
+        (slotEndBtn.getChildAt(2) as? android.widget.TextView)?.let {
+            slotEndBtn.setOnClickListener {
+                Dlg.time(a, at.plusMinutes(mins.toLong())) { v ->
+                    val e = LocalTime.parse(v)
+                    val d = java.time.Duration.between(at, e).toMinutes().toInt()
+                    if (d in 15..960) { mins = d; (minBtn.getChildAt(2) as? android.widget.TextView)?.text = "Daily: " + fmtMins(mins); refreshSlot() } else a.toast("End time must be after the start time")
+                }
+            }
+        }
+        refreshSlot()
         (endBtn.getChildAt(2) as? android.widget.TextView)?.let { tv ->
             endBtn.setOnClickListener { Dlg.date(a, end) { d -> end = d; tv.text = "Finish by: $d" } }
         }
@@ -224,12 +245,12 @@ object Targets {
             minBtn.setOnClickListener {
                 Dlg.input(a, "Daily study time (hours)", "e.g. 2 or 1.5", "%.1f".format(mins / 60f)) { v ->
                     val h = v.replace(',', '.').toFloatOrNull()
-                    if (h != null && h in 0.25f..16f) { mins = (h * 60).toInt(); tv.text = "Daily: " + fmtMins(mins) }
+                    if (h != null && h in 0.25f..16f) { mins = (h * 60).toInt(); tv.text = "Daily: " + fmtMins(mins); refreshSlot() }
                 }
             }
         }
         (atBtn.getChildAt(2) as? android.widget.TextView)?.let { tv ->
-            atBtn.setOnClickListener { Dlg.time(a, at) { s -> at = LocalTime.parse(s); tv.text = "Reminder: $s" } }
+            atBtn.setOnClickListener { Dlg.time(a, at) { s -> at = LocalTime.parse(s); tv.text = "Reminder: $s"; refreshSlot() } }
         }
         if (existing != null) {
             box.addView(
@@ -255,6 +276,8 @@ object Targets {
         fun save(): JSONObject2? {
             title = tf.text.toString().trim()
             if (title.isBlank()) { a.toast("Give the target a name"); return null }
+            val cl = clash(at, mins, existing?.id)
+            if (cl != null) { a.toast("Slot already booked by '${cl.title}'. Next free start: ${nextFree(mins, existing?.id)}"); return null }
             val arr = JSONArray(topics.toList())
             return if (existing == null) {
                 val col = Store.rows(COLL).size % T.palette.size
@@ -267,10 +290,36 @@ object Targets {
         val b = Dlg.builder(a).setTitle(if (existing == null) "New target" else "Edit target")
         val sv = android.widget.ScrollView(a).apply { setPadding(T.dp(22), T.dp(8), T.dp(22), 0); addView(box) }
         b.setView(sv)
-        b.setPositiveButton("Save") { _, _ -> if (save() != null) { schedule(a); done() } }
-        b.setNeutralButton("Save + Google Calendar") { _, _ -> save()?.let { schedule(a); addToCalendar(a, it); done() } }
+        b.setPositiveButton("Save", null)
+        b.setNeutralButton("Save + Google Calendar", null)
         b.setNegativeButton("Cancel", null)
-        b.show()
+        val dlg = b.create()
+        dlg.show()
+        dlg.getButton(android.app.AlertDialog.BUTTON_POSITIVE).setOnClickListener { if (save() != null) { schedule(a); done(); dlg.dismiss() } }
+        dlg.getButton(android.app.AlertDialog.BUTTON_NEUTRAL).setOnClickListener { save()?.let { schedule(a); addToCalendar(a, it); done(); dlg.dismiss() } }
+    }
+
+    private fun mod(t: LocalTime) = t.hour * 60 + t.minute
+
+    /** Another running target whose daily slot overlaps [at, at+mins). Slots are booked daily until the target ends or is complete. */
+    fun clash(at: LocalTime, mins: Int, excludeId: String?): JSONObject2? {
+        val s = mod(at)
+        val e = s + mins
+        return all().firstOrNull { t ->
+            t.id != excludeId && !(t.end?.isBefore(today()) ?: false) && !Slot.complete(t) &&
+                mod(t.at).let { ts -> ts < e && s < ts + t.mins }
+        }
+    }
+
+    /** First free start time (HH:MM, 5-minute steps from 04:00) where a slot of [mins] fits. */
+    fun nextFree(mins: Int, excludeId: String?): String {
+        var m = 4 * 60
+        while (m + mins <= 24 * 60) {
+            val st = LocalTime.of(m / 60, m % 60)
+            if (clash(st, mins, excludeId) == null) return "%02d:%02d".format(st.hour, st.minute)
+            m += 5
+        }
+        return "none today"
     }
 
     fun remove(

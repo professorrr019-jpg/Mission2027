@@ -477,7 +477,9 @@ class TimerService : Service() {
                     if (TimerState.phase() == "break") "Focus block done" else "Break over",
                 ).setContentText(
                     if (TimerState.phase() == "break") "Take ${TimerState.breakMin()} minutes off the screen." else "Back to ${TimerState.subject()}.",
-                ).setAutoCancel(true).build(),
+                ).setAutoCancel(true).setContentIntent(
+                    PendingIntent.getActivity(this, 5002, Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT),
+                ).build(),
             )
         } catch (
             e: Exception,

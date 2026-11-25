@@ -254,7 +254,9 @@ object Water {
                             CH_INFO,
                         ).setSmallIcon(
                             smallIcon(c),
-                        ).setContentTitle("Water goal reached").setContentText("$have ml today. Well done.").setAutoCancel(true).build(),
+                        ).setContentTitle("Water goal reached").setContentText("$have ml today. Well done.").setAutoCancel(true).setContentIntent(
+                            android.app.PendingIntent.getActivity(c, NID + 1, android.content.Intent(c, MainActivity::class.java).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP), android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT),
+                        ).build(),
                     )
                 } catch (
                     e: Exception,

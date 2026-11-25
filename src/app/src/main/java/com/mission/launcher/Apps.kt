@@ -95,7 +95,7 @@ object Apps {
         c: Context,
         pkg: String,
     ): Boolean {
-        if (pkg in study()) return true
+        if (pkg in study() || pkg in pins() || pkg == c.packageName) return true
         val ess =
             setOf("com.android.settings", "com.miui.securitycenter", "com.android.deskclock", "com.google.android.deskclock", "com.android.calculator2", "com.miui.calculator", "com.mi.android.globalFileexplorer", "com.google.android.apps.docs", "com.google.android.apps.bard", "com.openai.chatgpt", "com.flexcil.flexcilnote")
         return pkg in ess
@@ -106,6 +106,10 @@ object Apps {
         pkg: String,
         mode: String = "normal",
     ) {
+        if (Slot.strictOn() && !Slot.allowed(a, pkg)) {
+            a.toast("Strict focus: only study apps and pinned apps. Use the code on the block screen for a mock test break.")
+            return
+        }
         if (Focus.active() && !allowedInFocus(a, pkg)) {
             a.toast("Focus session running - ${Focus.left() / 60} min left")
             return
@@ -500,6 +504,7 @@ class DrawerView(val a: Activity, val onClose: () -> Unit) : FrameLayout(a) {
                 else -> all.filter { it.pkg !in hid }
             }
         if (Focus.active()) l = l.filter { Apps.allowedInFocus(a, it.pkg) }
+        if (Slot.strictOn()) l = l.filter { Slot.allowed(a, it.pkg) }
         if (query.isNotEmpty()) l = l.filter { it.label.contains(query, true) }
         shown = l
         adapter.notifyDataSetChanged()

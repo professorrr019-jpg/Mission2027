@@ -30,7 +30,7 @@ object Slot {
     private val main = Handler(Looper.getMainLooper())
 
     // ---------------- data ----------------
-    private fun complete(t: Targets.JSONObject2): Boolean {
+    fun complete(t: Targets.JSONObject2): Boolean {
         val (done, total) = Targets.progress(t)
         return total > 0 && done >= total
     }
@@ -172,6 +172,11 @@ object Slot {
             head.addView(View(c).apply { background = T.round(t.color, 5) }, LinearLayout.LayoutParams(T.dp(10), T.dp(10)))
             head.addView(c.text(t.title, 13f, 2), lpm(-2, -2, 8, 0, 0, 0, 1f))
             box.addView(head)
+            val slotEnd = t.at.plusMinutes(t.mins.toLong()).let { "%02d:%02d".format(it.hour, it.minute) }
+            val strictChips = c.hbox()
+            strictChips.addView(PyqUi.chip(c, if (Store.b("strict_slot", true)) "STRICT FOCUS until $slotEnd" else "Slot until $slotEnd", if (Store.b("strict_slot", true)) T.danger else T.sage, true))
+            strictChips.addView(PyqUi.chip(c, "Study apps + pinned only", T.amber), lpm(-2, -2, 6, 0, 0, 0))
+            box.addView(strictChips, lp(-2, -2, 6))
             val today = studiedToday(t)
             box.addView(c.text("Time to study  -  ${fmtMins(t.mins)} slot, ${Targets.daysLeft(t)} days left", 11.5f, 0, T.text2), lp(-2, -2, 4))
             box.addView(c.text("Today $today of ${t.mins} min  -  $done/$total topics done", 11f, 0, T.text3), lp(-2, -2, 2))
@@ -250,15 +255,21 @@ object Slot {
         return null
     }
 
-    fun strictOn(): Boolean = Store.b("strict_slot", true) && System.currentTimeMillis() >= Store.l("strict_off_until", 0L) && current() != null
+    /** Strict focus is ON during a booked slot and for as long as a study timer is running (unless a code-protected break is active). */
+    fun strictOn(): Boolean =
+        Store.b("strict_slot", true) && System.currentTimeMillis() >= Store.l("strict_off_until", 0L) &&
+            (current() != null || (Store.b("strict_timer", true) && TimerState.active()))
+
+    /** True while the code-protected 2 hour mock test break is running. */
+    fun mockBreak(): Boolean = System.currentTimeMillis() < Store.l("strict_off_until", 0L) && Store.b("strict_is_mock", false)
 
     fun endsAt(): String = current()?.let { t -> t.at.plusMinutes(t.mins.toLong()).let { "%02d:%02d".format(it.hour, it.minute) } } ?: ""
 
     fun allowed(c: Context, pkg: String): Boolean {
         if (pkg == c.packageName || pkg == "android" || pkg == "com.android.systemui") return true
-        if (pkg in CircleService.GEMINI_PACKAGES) return true
-        if (pkg in Apps.pins() || pkg in Apps.study()) return true
-        val keep = listOf("telecom", "dialer", "incallui", "permissioncontroller", "inputmethod", "keyboard", "com.miui.home", "com.android.launcher")
+        if (pkg in CircleService.GEMINI_PACKAGES || pkg in CircleService.LENS_PACKAGES) return true
+        if (pkg in Apps.pins() || pkg in Apps.study() || Apps.allowedInFocus(c, pkg)) return true
+        val keep = listOf("telecom", "dialer", "incallui", "permissioncontroller", "inputmethod", "keyboard", "com.miui.home", "com.android.launcher", "com.miui.notification", "com.miui.systemui", "com.android.packageinstaller", "packageinstaller", "com.google.android.gms", "com.android.documentsui", "com.android.providers", "com.google.android.documentsui")
         if (keep.any { pkg.contains(it) }) return true
         try {
             val ime = Settings.Secure.getString(c.contentResolver, Settings.Secure.DEFAULT_INPUT_METHOD)?.substringBefore('/')
@@ -270,22 +281,40 @@ object Slot {
 
     private var lastBlock = 0L
 
-    /** Called by the accessibility service whenever a window changes. */
+    private var pendingPkg: String? = null
+
+    /**
+     * Called by the accessibility service whenever a window changes. The foreground app is re-checked after a short delay, so short pop-ups,
+     * keyboards, share sheets and permission dialogs of allowed apps never trigger a false block.
+     */
     fun guard(svc: AccessibilityService, pkg: String) {
         try {
             if (!strictOn() || allowed(svc, pkg)) return
-            val now = System.currentTimeMillis()
-            if (now - lastBlock < 1500) return
-            lastBlock = now
-            svc.performGlobalAction(AccessibilityService.GLOBAL_ACTION_HOME)
+            if (pendingPkg != null) return
+            pendingPkg = pkg
             main.postDelayed({
+                pendingPkg = null
                 try {
-                    svc.startActivity(Intent(svc, StrictActivity::class.java).putExtra("pkg", pkg).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP))
+                    if (!strictOn()) return@postDelayed
+                    val top = try { svc.rootInActiveWindow?.packageName?.toString() } catch (e: Exception) { null } ?: pkg
+                    if (allowed(svc, top)) return@postDelayed
+                    val now = System.currentTimeMillis()
+                    if (now - lastBlock < 1200) return@postDelayed
+                    lastBlock = now
+                    svc.performGlobalAction(AccessibilityService.GLOBAL_ACTION_HOME)
+                    main.postDelayed({
+                        try {
+                            svc.startActivity(Intent(svc, StrictActivity::class.java).putExtra("pkg", top).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP))
+                        } catch (e: Exception) {
+                            Log.e("slot-guard", e)
+                        }
+                    }, 200)
                 } catch (e: Exception) {
                     Log.e("slot-guard", e)
                 }
-            }, 250)
+            }, 450)
         } catch (e: Exception) {
+            pendingPkg = null
             Log.e("slot-guard", e)
         }
     }
@@ -302,6 +331,7 @@ object Slot {
 /** Shown instead of a blocked app while a study slot is open. Emergency exit needs a random 15 character code typed by hand. */
 class StrictActivity : Activity() {
     private var code = Slot.newCode()
+    private var mockCode = Slot.newCode()
 
     override fun onCreate(b: Bundle?) {
         super.onCreate(b)
@@ -340,7 +370,40 @@ class StrictActivity : Activity() {
             },
             lp(-2, -2, 18),
         )
-        box.addView(text("Emergency exit", 13f, 2, T.text2), lp(-2, -2, 26))
+        box.addView(text("Mock test break (2 hours)", 13f, 2, T.textAccent(T.amber)), lp(-2, -2, 26))
+        box.addView(text("Only for taking a mock test. Type this code exactly; strict focus pauses for 2 hours.", 12f, 0, T.text3), lp(-2, -2, 6))
+        val mockShown =
+            text(mockCode, 22f, 3, T.text).apply {
+                typeface = Typeface.MONOSPACE
+                letterSpacing = 0.12f
+                setTextIsSelectable(false)
+                isLongClickable = false
+            }
+        box.addView(mockShown, lp(-2, -2, 8))
+        val mf = Dlg.field(this, "Type the mock test code here", "")
+        mf.isSingleLine = true
+        box.addView(mf, lp(-1, -2, 8))
+        box.addView(
+            pill("Start 2 hour mock break", "timer", false, T.amber) {
+                if (mf.text.toString().trim() == mockCode) {
+                    Store.put("strict_off_until", System.currentTimeMillis() + 120 * 60000L)
+                    Store.put("strict_is_mock", true)
+                    toast("Mock test break: 2 hours")
+                    try {
+                        packageManager.getLaunchIntentForPackage(pkg)?.let { startActivity(it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+                    } catch (e: Exception) {
+                    }
+                    finish()
+                } else {
+                    toast("Wrong code, a new one is shown")
+                    mockCode = Slot.newCode()
+                    mf.setText("")
+                    mockShown.text = mockCode
+                }
+            },
+            lp(-2, -2, 10),
+        )
+        box.addView(text("Emergency exit", 13f, 2, T.textAccent(T.danger)), lp(-2, -2, 26))
         box.addView(text("Type this code exactly to unlock for ${Store.i("strict_unlock_min", 15)} minutes:", 12f, 0, T.text3), lp(-2, -2, 6))
         val shown =
             text(code, 22f, 3, T.text).apply {
@@ -357,6 +420,7 @@ class StrictActivity : Activity() {
             pill("Unlock", "lock", false, T.danger) {
                 if (f.text.toString().trim() == code) {
                     Store.put("strict_off_until", System.currentTimeMillis() + Store.i("strict_unlock_min", 15).coerceIn(5, 60) * 60000L)
+                    Store.put("strict_is_mock", false)
                     toast("Unlocked for ${Store.i("strict_unlock_min", 15)} min")
                     try {
                         packageManager.getLaunchIntentForPackage(pkg)?.let { startActivity(it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }

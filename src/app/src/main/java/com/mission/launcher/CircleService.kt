@@ -67,6 +67,8 @@ class CircleService : AccessibilityService() {
                 "com.google.android.apps.googleassistant",
             )
 
+        val LENS_PACKAGES = listOf("com.google.android.googlequicksearchbox", "com.google.ar.lens")
+
         /** Prompt that travels with every circled image (editable in Settings > Circle to Search). */
         fun geminiPrompt(): String {
             val custom = Store.s("circle_prompt")
@@ -155,6 +157,10 @@ class CircleService : AccessibilityService() {
         } catch (e: Throwable) {
         }
         updateEdges()
+        if (!Store.b("circle_lens_v1", false)) {
+            Store.put("circle_lens_v1", true)
+            Store.put("circle_target", "lens")
+        }
     }
 
     // ---------------- edge swipe gestures (back from the left or right edge, optional bottom swipe) ----------------
@@ -327,8 +333,11 @@ class CircleService : AccessibilityService() {
                 Lasso(this, bm, { crop ->
                     if (crop == null) {
                         closeOverlay()
-                    } else if (Store.s("circle_target", "gemini") == "gemini" && sendToGemini(crop)) {
+                    } else if (Store.s("circle_target", "lens") == "gemini" && sendToGemini(crop)) {
                         closeOverlay()
+                    } else if (Store.s("circle_target", "lens") == "lens" && saveImage(crop) != null) {
+                        closeOverlay()
+                        sendToLens(saveImage(crop)!!)
                     } else {
                         closeOverlay()
                         showResult(crop)
@@ -508,7 +517,7 @@ class CircleService : AccessibilityService() {
                 val dm = resources.displayMetrics
                 for (w in windows) {
                     val packageName = w.root?.packageName ?: continue
-                    if (packageName !in GEMINI_PACKAGES) continue
+                    if (packageName !in GEMINI_PACKAGES && packageName !in LENS_PACKAGES) continue
                     val r = Rect()
                     w.getBoundsInScreen(r)
                     if (r.width().toLong() * r.height() > dm.widthPixels.toLong() * dm.heightPixels * 0.8) {
@@ -640,22 +649,123 @@ class CircleService : AccessibilityService() {
         return false
     }
 
+    /** Circled image into Google Lens, in a small floating window, with the "UPSC Prelims 2027" tag typed and searched by itself. */
     private fun sendToLens(u: Uri) {
         try {
-            (getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("UPSC prompt", geminiPrompt()))
+            (getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("UPSC tag", TAG))
         } catch (e: Exception) {
         }
-        for (pkg in listOf("com.google.android.googlequicksearchbox", "com.google.ar.lens")) {
-            val i = intentFor(u).setPackage(pkg)
-            if (packageManager.queryIntentActivities(i, 0).isNotEmpty()) {
+        val cands = ArrayList<Intent>()
+        cands.add(intentFor(u).setClassName("com.google.android.googlequicksearchbox", "com.google.android.apps.search.lens.LensShareEntryPointActivity"))
+        LENS_PACKAGES.forEach { cands.add(intentFor(u).setPackage(it)) }
+        val i = cands.firstOrNull { packageManager.queryIntentActivities(it, 0).isNotEmpty() }
+        if (i == null) {
+            share(u, "Search with")
+            return
+        }
+        try {
+            val o = ActivityOptions.makeBasic()
+            if (Store.b("circle_float", true)) {
+                val dm = resources.displayMetrics
+                val w = (dm.widthPixels * Store.i("circle_w", 42).coerceIn(30, 70) / 100f).toInt()
+                val h = (dm.heightPixels * Store.i("circle_h", 62).coerceIn(40, 90) / 100f).toInt()
+                val l = dm.widthPixels - w - T.dp(12)
+                val t = (dm.heightPixels - h) / 2
+                o.setLaunchBounds(Rect(l, t, l + w, t + h))
                 try {
-                    startActivity(i)
-                    return
-                } catch (e: Exception) {
+                    ActivityOptions::class.java.getMethod("setLaunchWindowingMode", Int::class.javaPrimitiveType).invoke(o, 5)
+                } catch (e: Throwable) {
                 }
             }
+            val ob = o.toBundle() ?: Bundle()
+            if (Store.b("circle_float", true)) ob.putInt("android.activity.windowingMode", 5)
+            startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), ob)
+            toast("Google Lens  -  $TAG")
+            checkFloat()
+            lensAuto(0)
+        } catch (e: Exception) {
+            Log.e("circle-lens", e)
+            share(u, "Search with")
         }
-        share(u, "Search with")
+    }
+
+    private fun lensRoot(): AccessibilityNodeInfo? {
+        try {
+            for (w in windows) {
+                val r = w.root ?: continue
+                if (r.packageName in LENS_PACKAGES) return r
+            }
+        } catch (e: Exception) {
+        }
+        return try {
+            rootInActiveWindow?.takeIf { it.packageName in LENS_PACKAGES }
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    private fun findByLabel(node: AccessibilityNodeInfo, labels: List<String>, depth: Int): AccessibilityNodeInfo? {
+        if (depth > 18) return null
+        val t = ((node.text?.toString() ?: "") + " " + (node.contentDescription?.toString() ?: "")).lowercase()
+        if (node.isVisibleToUser && labels.any { t.contains(it) }) return node
+        for (k in 0 until node.childCount) {
+            val ch = node.getChild(k) ?: continue
+            findByLabel(ch, labels, depth + 1)?.let { return it }
+        }
+        return null
+    }
+
+    private fun clickNode(n: AccessibilityNodeInfo): Boolean {
+        var t: AccessibilityNodeInfo? = n
+        while (t != null && !t.isClickable) t = t.parent
+        return t != null && t.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+    }
+
+    private var lensTyped = -1
+
+    /** Lens opens by itself: open "Add to your search", type the tag, press search. Polls for about 40 seconds. */
+    private fun lensAuto(n: Int) {
+        if (n == 0) lensTyped = -1
+        if (n > 65 || !Store.b("circle_autosend", true)) return
+        ui.postDelayed({
+            var done = false
+            try {
+                val root = lensRoot()
+                if (root != null) {
+                    if (pressPrompt(root, 0)) {
+                        lensAuto(n + 1)
+                        return@postDelayed
+                    }
+                    val ed = findEditor(root, 0)
+                    if (ed != null) {
+                        val cur = ed.text?.toString() ?: ""
+                        if (!cur.contains(TAG) && lensTyped < 0) {
+                            ed.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                            ed.performAction(AccessibilityNodeInfo.ACTION_FOCUS)
+                            val args = Bundle().putCharSequenceCompat(TAG)
+                            if (!ed.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)) ed.performAction(AccessibilityNodeInfo.ACTION_PASTE)
+                            lensTyped = n
+                        } else if (cur.contains(TAG)) {
+                            if (lensTyped < 0) lensTyped = n
+                            var sent = false
+                            if (android.os.Build.VERSION.SDK_INT >= 30) {
+                                sent = ed.performAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_IME_ENTER.id)
+                            }
+                            if (!sent) {
+                                findByLabel(root, listOf("search", "submit", "go", "खोज"), 0)?.takeIf { it.className?.toString()?.contains("EditText") != true }?.let { sent = clickNode(it) }
+                            }
+                            done = sent && n - lensTyped >= 1
+                        }
+                    } else {
+                        // the search-box is collapsed: open it
+                        findByLabel(root, listOf("add to your search", "add to search", "add to your", "search or ask", "ask about this image", "अपनी खोज में जोड़ें"), 0)?.let { clickNode(it) }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("circle-lens-auto", e)
+            }
+            if (!done) lensAuto(n + 1)
+        }, 600)
     }
 
     private fun share(

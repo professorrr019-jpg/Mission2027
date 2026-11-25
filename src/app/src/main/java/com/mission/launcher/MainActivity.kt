@@ -408,9 +408,11 @@ class MainActivity : Activity(), Host {
         when (i?.getStringExtra("open")) {
             "toolkit" -> Toolkit.open(this)
             "auto" -> Auto.open(this)
+            "auto_detail" -> Auto.detail(this, i.getStringExtra("rule"))
             "mocks" -> Toolkit.mockSchedule(this)
         }
         i?.removeExtra("open")
+        i?.removeExtra("rule")
     }
 
     override fun onNewIntent(i: Intent) {
@@ -1306,6 +1308,9 @@ class MainActivity : Activity(), Host {
                     }
                     closeRightPanel()
                 },
+                tile("split", "Split view", T.plum) { closeRightPanel(); Split.pick(this) },
+                tile("layers", "Last split", T.sage) { closeRightPanel(); Split.last(this) },
+                tile("split", "Split toggle", T.slate) { closeRightPanel(); ui.postDelayed({ CircleService.global(this, android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_TOGGLE_SPLIT_SCREEN) }, 250) },
                 tile("eye", "Show timer", T.teal) { closeRightPanel(); TimerState.bringBack(this) },
                 tile("search", "Circle search", T.plum) { closeRightPanel(); ui.postDelayed({ CircleService.capture(this) }, 250) },
                 tile("note", "Quick note", T.clay) { closeRightPanel(); startActivity(Intent(this, VoiceNoteActivity::class.java)) },

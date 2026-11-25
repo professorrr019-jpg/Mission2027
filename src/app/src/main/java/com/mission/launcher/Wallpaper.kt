@@ -917,6 +917,12 @@ object Wallpaper {
         return out
     }
 
+    /** Same as [apply] but never blocks the screen: the heavy bitmap work runs on a background thread. */
+    fun applyAsync(c: Context, force: Boolean = false) {
+        val app = c.applicationContext
+        Thread { try { apply(app, force) } catch (e: Exception) { Log.e("wp-async", e) } }.start()
+    }
+
     fun apply(
         c: Context,
         force: Boolean = false,

@@ -201,7 +201,7 @@ object Auto {
 
     private fun notify(c: Context, r: Rule) {
         try {
-            val open = Intent(c, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP).putExtra("open", if (r.id[0] == 's' || r.id[0] == 'r') "toolkit" else "auto")
+            val open = Intent(c, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP).putExtra("open", "auto_detail").putExtra("rule", r.id)
             val nid = 4300 + (r.id.hashCode() and 0xff)
             val pi = PendingIntent.getActivity(c, nid, open, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
             val n =
@@ -235,7 +235,7 @@ object Auto {
         val row = c.hbox()
         row.addView(
             c.pill("Open", null, true, T.accent) {
-                c.startActivity(Intent(c, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP).putExtra("open", if (r.id[0] == 's' || r.id[0] == 'r') "toolkit" else "auto"))
+                c.startActivity(Intent(c, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP).putExtra("open", "auto_detail").putExtra("rule", r.id))
                 Overlay.remove(c, tag)
             },
             lpm(-2, -2, 0, 0, 8, 0),
@@ -251,6 +251,21 @@ object Auto {
             }
         Overlay.draggable(c, box, lp, tag)
         Overlay.show(c, tag, box, lp, 60_000L)
+    }
+
+    /** What a tap on a rule's notification or floating card shows: the full message and what to do, not the settings list. */
+    fun detail(a: android.app.Activity, id: String?) {
+        val r = rules.firstOrNull { it.id == id } ?: run { open(a); return }
+        val t = timeOf(r)
+        val box = a.vbox()
+        box.padDp(20, 8, 20, 4)
+        box.addView(PyqUi.chip(a, r.group, T.accent))
+        box.addView(a.text(r.msg.ifBlank { r.title }, 14f, 0, T.text), lp(-1, -2, 10))
+        box.addView(a.text("Runs daily around " + "%02d:%02d".format(t.hour, t.minute), 11.5f, 1, T.text3), lp(-1, -2, 8))
+        val b = Dlg.builder(a).setTitle(r.title).setView(box).setPositiveButton("Done", null)
+        if (r.id[0] == 's' || r.id[0] == 'r') b.setNeutralButton("Open tool") { _, _ -> Toolkit.open(a) }
+        b.setNegativeButton("All reminders") { _, _ -> open(a) }
+        b.show()
     }
 
     // ---------------- screen ----------------
