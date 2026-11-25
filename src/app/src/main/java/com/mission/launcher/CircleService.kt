@@ -803,10 +803,12 @@ class CircleService : AccessibilityService() {
      * and Lens is shown on top once more. Tried once.
      */
     private fun restoreSource(source: String, u: Uri) {
-        if (source.isBlank() || !Store.b("circle_restore", true)) return
+        if (source.isBlank() || !Store.b("circle_restore", false)) return
         ui.postDelayed({
             try {
-                if (source in visiblePackages()) return@postDelayed
+                val vis = visiblePackages()
+                // Lens full screen simply covers the source app: that is normal, nothing to restore. Only act when neither is on screen.
+                if (source in vis || vis.any { it in LENS_PACKAGES }) return@postDelayed
                 val li = packageManager.getLaunchIntentForPackage(source) ?: return@postDelayed
                 startActivity(li.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
                 toast("Restoring the app you circled")

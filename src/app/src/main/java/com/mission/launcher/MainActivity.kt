@@ -273,6 +273,8 @@ class MainActivity : Activity(), Host {
             } else {
                 registerReceiver(pkgReceiver, f)
             }
+            val df = IntentFilter().apply { addAction(Intent.ACTION_DATE_CHANGED); addAction(Intent.ACTION_TIME_CHANGED); addAction(Intent.ACTION_TIMEZONE_CHANGED) }
+            if (Build.VERSION.SDK_INT >= 33) registerReceiver(dateReceiver, df, Context.RECEIVER_NOT_EXPORTED) else registerReceiver(dateReceiver, df)
         } catch (
             e: Throwable,
         ) {
@@ -313,8 +315,21 @@ class MainActivity : Activity(), Host {
         }
     }
 
+    private val dateReceiver =
+        object : android.content.BroadcastReceiver() {
+            override fun onReceive(c: Context, i: Intent) {
+                // New day: daily trackers (water, habits, reviews, emergency passes) restart; redraw everything.
+                try {
+                    Review.midnight(c)
+                } catch (e: Exception) { Log.e("midnight", e) }
+                Store.changed()
+                scheduleRefresh(100)
+            }
+        }
+
     override fun onDestroy() {
         super.onDestroy()
+        try { unregisterReceiver(dateReceiver) } catch (e: Exception) { Log.e("mainactivity", e) }
         if (Build.VERSION.SDK_INT >= 33) {
             backCallback?.let(onBackInvokedDispatcher::unregisterOnBackInvokedCallback)
             backCallback = null
@@ -1323,8 +1338,8 @@ class MainActivity : Activity(), Host {
                         TimerState.finish(true)
                         TimerService.stop(this)
                     } else {
-                        TimerState.start()
-                        TimerService.start(this)
+                        closeRightPanel()
+                        Slot.startTopics(this)
                     }
                     closeRightPanel()
                 },

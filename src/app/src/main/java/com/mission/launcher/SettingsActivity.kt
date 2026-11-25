@@ -852,7 +852,7 @@ class SettingsActivity : Activity() {
         group(
             sw("Strict focus during a slot", "While a target's study slot is open only study apps and pinned apps work. Needs the accessibility service (Circle to Search section)", "strict_slot", true),
             sw("Review after each study session", "After Save: mark topics Complete / Backlog / Revise and write notes (mandatory in strict focus)", "review_after_session", true),
-            sw("Strict focus while a timer runs", "Study timer ON = only study apps, pinned apps and Gemini/Lens work. Only the code-protected 2 hour break can pause it", "strict_timer", true),
+            sw("Strict focus while a timer runs", "Study timer ON = only study apps, pinned apps and Gemini/Lens work. Pauses: 5 min emergency pass (5 a day, no code) or the code-protected 2 hour mock break", "strict_timer", true),
         )
         note("Settings and every other app are blocked in the slot. Add your study apps in Study apps, and pin the ones you need on the dock.")
         label("Timer")
@@ -1945,7 +1945,7 @@ class SettingsActivity : Activity() {
                 }
             },
             sw("Add subject of the running timer", "UPSC Prelims 2027 Polity while a Polity timer runs", "circle_subject", true),
-            sw("Reopen the circled app if it closes", "Brings the app back and shows Lens again", "circle_restore", true),
+            sw("Reopen the circled app if it closes", "Off by default. Only if the app vanished and Lens is not on screen", "circle_restore", false),
             action("clock", T.plum, "Circle search history", "Last 20 circled images, tap to search again") { CircleService.history(c as android.app.Activity) },
             sw("Add 'UPSC Prelims 2027' tag", "Sent with every circled image so answers are exam focused", "circle_tag", true),
             value("Prompt sent with the image", null, CircleService.geminiPrompt().take(60) + "...") {

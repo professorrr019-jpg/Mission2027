@@ -115,6 +115,28 @@ object Slot {
         dismiss(c)
     }
 
+    /** Study timer with a choice: pick subject(s) and any number of topics, then the timer starts and asks for completion at the end. */
+    fun startTopics(a: android.app.Activity) {
+        if (TimerState.active()) {
+            a.toast("A timer is already running")
+            return
+        }
+        PyqUi.pick(a, "Choose subject and topics", null, emptyList(), false, "Start timer") { keys ->
+            if (TimerState.active()) return@pick
+            if (keys.isEmpty()) {
+                TimerState.start()
+            } else {
+                val names = keys.joinToString(" + ") { Targets.topicName(it) }
+                TimerState.start(keys[0].substringBefore('|'), "stopwatch", if (keys.size == 1) keys[0] else names)
+                Store.put("slot_target", "")
+                Store.setStringList("slot_keys", if (keys.size == 1) emptyList() else keys)
+            }
+            TimerService.start(a)
+            a.toast(if (keys.isEmpty()) "Timer started" else "Timer started: ${keys.size} topic(s)")
+            Store.changed()
+        }
+    }
+
     /** Starts one timer for several topics at once. Subject = the first topic's subject, topic text = names joined. */
     fun beginMulti(c: Context, t: Targets.JSONObject2, keys: List<String>) {
         if (keys.isEmpty()) {
@@ -377,8 +399,30 @@ class StrictActivity : Activity() {
             },
             lp(-2, -2, 18),
         )
+        val today = java.time.LocalDate.now(Repo.zone()).toString()
+        val used = if (Store.s("em_day") == today) Store.i("em_used", 0) else 0
+        val left = (5 - used).coerceAtLeast(0)
+        box.addView(
+            pill("Emergency 5 min  ($left of 5 left today)", "timer", false, T.danger) {
+                val u = if (Store.s("em_day") == java.time.LocalDate.now(Repo.zone()).toString()) Store.i("em_used", 0) else 0
+                if (u >= 5) {
+                    toast("All 5 emergency passes used today")
+                } else {
+                    Store.put("em_day", java.time.LocalDate.now(Repo.zone()).toString())
+                    Store.put("em_used", u + 1)
+                    Store.put("strict_off_until", System.currentTimeMillis() + 5 * 60000L)
+                    Store.put("strict_is_mock", false)
+                    toast("Emergency pass: 5 minutes (" + (4 - u) + " left today)")
+                    try {
+                        packageManager.getLaunchIntentForPackage(pkg)?.let { startActivity(it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+                    } catch (e: Exception) { Log.e("slot", e) }
+                    finish()
+                }
+            },
+            lp(-2, -2, 22),
+        )
         box.addView(text("2 hour break (mock test)", 14f, 3, T.textAccent(T.amber)), lp(-2, -2, 26))
-        box.addView(text("This is the only exit. Meant for taking a mock test. Type this code exactly; strict focus pauses for 2 hours.", 12f, 0, T.text3), lp(-2, -2, 6))
+        box.addView(text("Meant for taking a mock test. Type this code exactly; strict focus pauses for 2 hours.", 12f, 0, T.text3), lp(-2, -2, 6))
         val mockShown =
             text(mockCode, 22f, 3, T.text).apply {
                 typeface = Typeface.MONOSPACE
@@ -409,7 +453,7 @@ class StrictActivity : Activity() {
             },
             lp(-2, -2, 10),
         )
-        box.addView(text("There is no other way out: finish the timer, or take the 2 hour break above.", 12f, 0, T.text3), lp(-2, -2, 22))
+        box.addView(text("Ways out: finish the timer, a 5 minute emergency pass (5 a day), or the 2 hour mock break.", 12f, 0, T.text3), lp(-2, -2, 22))
         setContentView(android.widget.ScrollView(this).apply { addView(box) })
     }
 
