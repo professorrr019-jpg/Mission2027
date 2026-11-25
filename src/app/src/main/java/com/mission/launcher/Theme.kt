@@ -45,7 +45,7 @@ object T {
         if (fontsLoaded) return
         try {
             fun w(wt: Int) = Typeface.Builder(c.assets, "Inter.ttf").setFontVariationSettings("'wght' $wt").build()
-            tfs = arrayOf(w(400), w(500), w(600), w(750))
+            tfs = arrayOf(w(470), w(570), w(670), w(820))
             fontsLoaded = true
         } catch (e: Throwable) {
             tfs = arrayOf(Typeface.create("sans-serif", Typeface.NORMAL), Typeface.create("sans-serif-medium", Typeface.NORMAL), Typeface.create("sans-serif-medium", Typeface.NORMAL), Typeface.create("sans-serif", Typeface.BOLD))
@@ -72,12 +72,12 @@ object T {
     // surfaces
     val card get() = if (dark) 0xF2292826.toInt() else 0xF8FFFFFF.toInt()
     val cardSolid get() = if (dark) 0xFF292826.toInt() else 0xFFFFFFFF.toInt()
-    val page get() = if (dark) 0xFF171615.toInt() else 0xFFF4F1EB.toInt()
-    val inset get() = if (dark) 0xFF35332F.toInt() else 0xFFF1EDE6.toInt()
-    val line get() = if (dark) 0x22FFFFFF else 0x14000000
-    val text get() = if (dark) 0xFFF3F0EB.toInt() else 0xFF211F1C.toInt()
-    val text2 get() = if (dark) 0xFFB9B3AA.toInt() else 0xFF6A645C.toInt()
-    val text3 get() = if (dark) 0xFFB8B1A8.toInt() else 0xFF746D64.toInt()
+    val page get() = if (dark) 0xFF171615.toInt() else 0xFFF6F2E6.toInt()
+    val inset get() = if (dark) 0xFF35332F.toInt() else 0xFFEBE6D8.toInt()
+    val line get() = if (dark) 0x26FFFFFF else 0x1F000000
+    val text get() = if (dark) 0xFFFAF7F2.toInt() else 0xFF0B0A09.toInt()
+    val text2 get() = if (dark) 0xFFD2CCC3.toInt() else 0xFF45403A.toInt()
+    val text3 get() = if (dark) 0xFFC4BDB3.toInt() else 0xFF55504A.toInt()
     val shadow get() = if (dark) 0x66000000 else 0x33463C2E
 
     // muted natural palette (eye-friendly, only one soft blue)
@@ -97,7 +97,7 @@ object T {
 
     fun contentColor(background: Int): Int {
         val white = Color.WHITE
-        val ink = 0xFF211F1C.toInt()
+        val ink = 0xFF0B0A09.toInt()
         return if (contrast(background, white) >= contrast(background, ink)) white else ink
     }
 
@@ -105,7 +105,7 @@ object T {
         val target = if (dark) Color.WHITE else Color.BLACK
         var current = color
         repeat(24) {
-            if (contrast(current, page) >= 4.5 && contrast(current, cardSolid) >= 4.5) return current
+            if (contrast(current, page) >= 5.5 && contrast(current, cardSolid) >= 5.5) return current
             current =
                 Color.rgb(
                     (Color.red(current) * 0.88f + Color.red(target) * 0.12f).toInt(),
@@ -113,7 +113,7 @@ object T {
                     (Color.blue(current) * 0.88f + Color.blue(target) * 0.12f).toInt(),
                 )
         }
-        return if (dark) text else 0xFF211F1C.toInt()
+        return if (dark) text else 0xFF0B0A09.toInt()
     }
 
     private fun contrast(
