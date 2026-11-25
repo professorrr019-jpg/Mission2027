@@ -55,8 +55,7 @@ class CircleService : AccessibilityService() {
         fun openSettings(c: Context) {
             try {
                 c.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-            } catch (e: Exception) {
-            }
+            } catch (e: Exception) { Log.e("circleservice", e) }
         }
 
         const val TAG = "UPSC Prelims 2027"
@@ -88,8 +87,7 @@ class CircleService : AccessibilityService() {
                 c.startActivity(
                     Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + c.packageName)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
                 )
-            } catch (e: Exception) {
-            }
+            } catch (e: Exception) { Log.e("circleservice", e) }
         }
 
         fun need(c: Context) {
@@ -126,10 +124,7 @@ class CircleService : AccessibilityService() {
                 val sb = c.getSystemService("statusbar")
                 Class.forName("android.app.StatusBarManager").getMethod("expandNotificationsPanel").invoke(sb)
                 return true
-            } catch (
-                e: Throwable,
-            ) {
-            }
+            } catch (e: Throwable) { Log.e("circleservice", e) }
             val s =
                 inst ?: run {
                     need(c)
@@ -154,8 +149,7 @@ class CircleService : AccessibilityService() {
         Boot.ensure(this)
         try {
             accessibilityButtonController.registerAccessibilityButtonCallback(btn)
-        } catch (e: Throwable) {
-        }
+        } catch (e: Throwable) { Log.e("circleservice", e) }
         updateEdges()
         if (!Store.b("circle_lens_v1", false)) {
             Store.put("circle_lens_v1", true)
@@ -171,8 +165,7 @@ class CircleService : AccessibilityService() {
         edgeViews.forEach {
             try {
                 wm.removeViewImmediate(it)
-            } catch (e: Exception) {
-            }
+            } catch (e: Exception) { Log.e("circleservice", e) }
         }
         edgeViews.clear()
     }
@@ -322,8 +315,7 @@ class CircleService : AccessibilityService() {
         overlay?.let {
             try {
                 (getSystemService(Context.WINDOW_SERVICE) as WindowManager).removeView(it)
-            } catch (e: Exception) {
-            }
+            } catch (e: Exception) { Log.e("circleservice", e) }
         }
         overlay = null
     }
@@ -452,8 +444,7 @@ class CircleService : AccessibilityService() {
         val prompt = geminiPrompt()
         try {
             (getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("UPSC prompt", prompt))
-        } catch (e: Exception) {
-        }
+        } catch (e: Exception) { Log.e("circleservice", e) }
         val i =
             GEMINI_PACKAGES.asSequence().map { pkg ->
                 intentFor(u).setPackage(pkg).putExtra(Intent.EXTRA_TEXT, prompt).putExtra(Intent.EXTRA_SUBJECT, TAG)
@@ -474,8 +465,7 @@ class CircleService : AccessibilityService() {
                 try {
                     // 5 = freeform windowing mode; forces a floating window where the system allows it.
                     ActivityOptions::class.java.getMethod("setLaunchWindowingMode", Int::class.javaPrimitiveType).invoke(o, 5)
-                } catch (e: Throwable) {
-                }
+                } catch (e: Throwable) { Log.e("circleservice", e) }
             }
             val ob = o.toBundle() ?: Bundle()
             if (Store.b("circle_float", true)) ob.putInt("android.activity.windowingMode", 5)
@@ -526,8 +516,7 @@ class CircleService : AccessibilityService() {
                         toast("Gemini opened full screen. On this device, enable freeform windows in Developer options for a floating result.")
                     }
                 }
-            } catch (e: Exception) {
-            }
+            } catch (e: Exception) { Log.e("circleservice", e) }
         }, 2200)
     }
 
@@ -537,8 +526,7 @@ class CircleService : AccessibilityService() {
                 val r = w.root ?: continue
                 if (r.packageName in GEMINI_PACKAGES) return r
             }
-        } catch (e: Exception) {
-        }
+        } catch (e: Exception) { Log.e("circleservice", e) }
         return try {
             rootInActiveWindow?.takeIf { it.packageName in GEMINI_PACKAGES }
         } catch (e: Exception) {
@@ -654,8 +642,7 @@ class CircleService : AccessibilityService() {
     private fun sendToLens(u: Uri) {
         try {
             (getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("UPSC tag", TAG))
-        } catch (e: Exception) {
-        }
+        } catch (e: Exception) { Log.e("circleservice", e) }
         val cands = ArrayList<Intent>()
         cands.add(intentFor(u).setClassName("com.google.android.googlequicksearchbox", "com.google.android.apps.search.lens.LensShareEntryPointActivity"))
         LENS_PACKAGES.forEach { cands.add(intentFor(u).setPackage(it)) }
@@ -675,8 +662,7 @@ class CircleService : AccessibilityService() {
                 o.setLaunchBounds(Rect(l, t, l + w, t + h))
                 try {
                     ActivityOptions::class.java.getMethod("setLaunchWindowingMode", Int::class.javaPrimitiveType).invoke(o, 5)
-                } catch (e: Throwable) {
-                }
+                } catch (e: Throwable) { Log.e("circleservice", e) }
             }
             val ob = o.toBundle() ?: Bundle()
             if (Store.b("circle_float", true)) ob.putInt("android.activity.windowingMode", 5)
@@ -696,8 +682,7 @@ class CircleService : AccessibilityService() {
                 val r = w.root ?: continue
                 if (r.packageName in LENS_PACKAGES) return r
             }
-        } catch (e: Exception) {
-        }
+        } catch (e: Exception) { Log.e("circleservice", e) }
         return try {
             rootInActiveWindow?.takeIf { it.packageName in LENS_PACKAGES }
         } catch (e: Exception) {

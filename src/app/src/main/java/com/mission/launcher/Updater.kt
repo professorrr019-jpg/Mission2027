@@ -126,8 +126,7 @@ object Updater {
             say("Allow 'Install unknown apps' for Mission, then tap update again")
             try {
                 a.startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:" + a.packageName)))
-            } catch (e: Exception) {
-            }
+            } catch (e: Exception) { Log.e("updater", e) }
             return
         }
         Thread {

@@ -80,8 +80,7 @@ object Backup {
             Store.put("backup_where", where)
             try {
                 android.app.backup.BackupManager.dataChanged(c.packageName)
-            } catch (e: Exception) {
-            }
+            } catch (e: Exception) { Log.e("backup", e) }
             "Backup saved to $where"
         } catch (e: Exception) {
             Log.e("backup", e)
@@ -118,8 +117,7 @@ object Backup {
                 uri,
                 Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
             )
-        } catch (e: Exception) {
-        }
+        } catch (e: Exception) { Log.e("backup", e) }
         Store.put("backup_file", uri.toString())
     }
 
@@ -165,10 +163,7 @@ object Backup {
                 uri,
                 Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
             )
-        } catch (
-            e: Exception,
-        ) {
-        }
+        } catch (e: Exception) { Log.e("backup", e) }
         Store.put("backup_tree", uri.toString())
     }
 

@@ -259,10 +259,7 @@ object Overlay {
                         old ->
                     try {
                         (c.getSystemService(Context.WINDOW_SERVICE) as WindowManager).removeViewImmediate(old)
-                    } catch (
-                        e: Exception,
-                    ) {
-                    }
+                    } catch (e: Exception) { Log.e("platform", e) }
                 }
                 val wm = c.getSystemService(Context.WINDOW_SERVICE) as WindowManager
                 wm.addView(v, lp)
@@ -287,8 +284,7 @@ object Overlay {
         try {
             val v = views[tag] ?: return
             (c.getSystemService(Context.WINDOW_SERVICE) as WindowManager).updateViewLayout(v, lp)
-        } catch (e: Exception) {
-        }
+        } catch (e: Exception) { Log.e("platform", e) }
     }
 
     fun remove(
@@ -300,10 +296,7 @@ object Overlay {
                 timers.remove(tag)?.let { main.removeCallbacks(it) }
                 val v = views.remove(tag) ?: return@post
                 (c.getSystemService(Context.WINDOW_SERVICE) as WindowManager).removeViewImmediate(v)
-            } catch (
-                e: Exception,
-            ) {
-            }
+            } catch (e: Exception) { Log.e("platform", e) }
         }
     }
 }

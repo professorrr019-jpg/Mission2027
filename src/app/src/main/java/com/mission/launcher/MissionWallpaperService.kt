@@ -185,8 +185,7 @@ class MissionWallpaperService : WallpaperService() {
                 if (canvas != null) {
                     try {
                         surfaceHolder.unlockCanvasAndPost(canvas)
-                    } catch (_: Exception) {
-                    }
+                    } catch (e: Exception) { Log.e("missionwallpaperservice", e) }
                 }
             }
         }

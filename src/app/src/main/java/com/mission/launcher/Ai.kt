@@ -165,8 +165,7 @@ object Ai {
                     Store.update("ai_chat", o.optString("id")) { it.put("sum", true) }
                 }
             }
-        } catch (e: Exception) {
-        }
+        } catch (e: Exception) { Log.e("ai", e) }
     }
 
     // ---------- public API ----------
@@ -401,10 +400,7 @@ object Ai {
             try {
                 pm.getPackageInfo(p, 0)
                 if (pm.getLaunchIntentForPackage(p) != null) out.add(AiApp(l, p))
-            } catch (
-                e: Exception,
-            ) {
-            }
+            } catch (e: Exception) { Log.e("ai", e) }
         }
         try {
             pm.getInstalledApplications(0).forEach { ai ->
@@ -418,10 +414,7 @@ object Ai {
                     out.add(AiApp(l, ai.packageName))
                 }
             }
-        } catch (
-            e: Exception,
-        ) {
-        }
+        } catch (e: Exception) { Log.e("ai", e) }
         return out
     }
 

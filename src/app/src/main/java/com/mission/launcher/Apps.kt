@@ -136,10 +136,7 @@ object Apps {
                         ) as LauncherApps
                     ).startMainActivity(cn, Process.myUserHandle(), null, null)
                     return
-                } catch (
-                    x: Exception,
-                ) {
-                }
+                } catch (x: Exception) { Log.e("apps", x) }
                 a.startActivity(
                     Intent(
                         Intent.ACTION_MAIN,
@@ -180,8 +177,7 @@ object Apps {
             a.startActivity(
                 Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$pkg")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
             )
-        } catch (e: Exception) {
-        }
+        } catch (e: Exception) { Log.e("apps", e) }
     }
 
     fun uninstall(
@@ -190,8 +186,7 @@ object Apps {
     ) {
         try {
             a.startActivity(Intent(Intent.ACTION_DELETE, Uri.parse("package:$pkg")))
-        } catch (e: Exception) {
-        }
+        } catch (e: Exception) { Log.e("apps", e) }
     }
 }
 
@@ -307,8 +302,7 @@ object Usage {
     fun openSettings(c: Context) {
         try {
             c.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-        } catch (e: Exception) {
-        }
+        } catch (e: Exception) { Log.e("apps", e) }
     }
 }
 
@@ -630,10 +624,7 @@ class DrawerView(val a: Activity, val onClose: () -> Unit) : FrameLayout(a) {
                     close()
                     try {
                         a.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.google.com/search?q=" + Uri.encode(query))))
-                    } catch (
-                        x: Exception,
-                    ) {
-                    }
+                    } catch (x: Exception) { Log.e("apps", x) }
                 },
                 lp(-1, -2, 4),
             )

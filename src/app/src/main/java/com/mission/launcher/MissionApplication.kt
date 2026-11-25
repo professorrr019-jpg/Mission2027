@@ -33,14 +33,12 @@ class MissionApplication : Application() {
             try {
                 MissionWallpaperService.releaseCachedFrame()
                 Backdrop.clear()
-            } catch (_: Exception) {
-            }
+            } catch (e: Exception) { Log.e("MissionLauncher", "failed", e) }
         }
         try {
             val prefs = getSharedPreferences("mission_diagnostics", MODE_PRIVATE)
             prefs.edit().putLong("last_trim", System.currentTimeMillis()).putInt("last_trim_level", level).apply()
-        } catch (_: Exception) {
-        }
+        } catch (e: Exception) { Log.e("MissionLauncher", "failed", e) }
     }
 
     private fun installCrashLogger() {
@@ -62,7 +60,11 @@ class MissionApplication : Application() {
             } catch (loggingError: Throwable) {
                 Log.e("MissionLauncher", "Unable to write the local crash log", loggingError)
             } finally {
-                if (previous != null) {
+                // A crash in a background worker thread is logged and survived; only the main thread (or out-of-memory) ends the process.
+                val survivable = thread.name != "main" && error !is OutOfMemoryError
+                if (survivable) {
+                    android.util.Log.e("MissionLauncher", "Background thread ${thread.name} failed, app kept alive", error)
+                } else if (previous != null) {
                     previous.uncaughtException(thread, error)
                 } else {
                     Process.killProcess(Process.myPid())

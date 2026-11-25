@@ -647,10 +647,7 @@ object Cards {
                 c.pill("Allow notification access", "bell", true, T.amber) {
                     try {
                         c.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
-                    } catch (
-                        e: Exception,
-                    ) {
-                    }
+                    } catch (e: Exception) { Log.e("cards", e) }
                 },
                 lp(-2, -2, 8),
             )
@@ -1363,10 +1360,7 @@ object Cards {
             c.pill("Open portal", "link", false) {
                 try {
                     c.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(Store.s("zite_portal", Zite.PORTAL))))
-                } catch (
-                    e: Exception,
-                ) {
-                }
+                } catch (e: Exception) { Log.e("cards", e) }
             },
         )
         card.addView(r, lp(-2, -2, 10))

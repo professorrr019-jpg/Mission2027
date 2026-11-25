@@ -23,13 +23,11 @@ object Cleaner {
         out.add(c.packageName)
         try {
             Settings.Secure.getString(c.contentResolver, Settings.Secure.DEFAULT_INPUT_METHOD)?.substringBefore('/')?.let { out.add(it) }
-        } catch (e: Exception) {
-        }
+        } catch (e: Exception) { Log.e("cleaner", e) }
         for (i in listOf(Intent(Intent.ACTION_DIAL), Intent(Intent.ACTION_VIEW, android.net.Uri.parse("sms:")), Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME))) {
             try {
                 c.packageManager.resolveActivity(i, 0)?.activityInfo?.packageName?.let { out.add(it) }
-            } catch (e: Exception) {
-            }
+            } catch (e: Exception) { Log.e("cleaner", e) }
         }
         out.addAll(Store.stringList("clean_keep"))
         return out

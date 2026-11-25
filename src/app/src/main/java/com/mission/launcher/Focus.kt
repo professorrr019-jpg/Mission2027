@@ -63,9 +63,6 @@ object Focus {
                     if (on) NotificationManager.INTERRUPTION_FILTER_ALARMS else NotificationManager.INTERRUPTION_FILTER_ALL,
                 )
             }
-        } catch (
-            e: Exception,
-        ) {
-        }
+        } catch (e: Exception) { Log.e("focus", e) }
     }
 }

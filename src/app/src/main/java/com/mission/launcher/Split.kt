@@ -31,8 +31,7 @@ object Split {
                     val o = ActivityOptions.makeBasic().setLaunchBounds(r)
                     try {
                         ActivityOptions::class.java.getMethod("setLaunchWindowingMode", Int::class.javaPrimitiveType).invoke(o, 5)
-                    } catch (e: Throwable) {
-                    }
+                    } catch (e: Throwable) { Log.e("split", e) }
                     return o.toBundle() ?: android.os.Bundle()
                 }
                 val w = dm.widthPixels / 2

@@ -499,18 +499,14 @@ class TimerService : Service() {
                     PendingIntent.getActivity(this, 5002, Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT),
                 ).build(),
             )
-        } catch (
-            e: Exception,
-        ) {
-        }
+        } catch (e: Exception) { Log.e("timer", e) }
     }
 
     private fun buzz() {
         try {
             val v = getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
             v.vibrate(VibrationEffect.createWaveform(longArrayOf(0, 200, 120, 200, 120, 400), -1))
-        } catch (e: Exception) {
-        }
+        } catch (e: Exception) { Log.e("timer", e) }
     }
 
     private fun buildOverlay() {

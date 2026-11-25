@@ -846,6 +846,7 @@ class SettingsActivity : Activity() {
         label("Strict study slot")
         group(
             sw("Strict focus during a slot", "While a target's study slot is open only study apps and pinned apps work. Needs the accessibility service (Circle to Search section)", "strict_slot", true),
+            sw("Review after each study session", "After Save: mark topics Complete / Backlog / Revise and write notes (mandatory in strict focus)", "review_after_session", true),
             sw("Strict focus while a timer runs", "Study timer ON = only study apps, pinned apps and Gemini/Lens work. Mock test break and emergency code can pause it", "strict_timer", true),
             num("Emergency unlock time", "strict_unlock_min", 15, 5, 60, "min", "Typing the random 15 character code unlocks for this long"),
         )
@@ -877,10 +878,7 @@ class SettingsActivity : Activity() {
                 if (it) {
                     try {
                         startActivity(Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS))
-                    } catch (
-                        e: Exception,
-                    ) {
-                    }
+                    } catch (e: Exception) { Log.e("settingsactivity", e) }
                 }
             },
             action(
@@ -904,10 +902,7 @@ class SettingsActivity : Activity() {
             action("shield", T.slate, "Notification access", "Required for muting") {
                 try {
                     startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
-                } catch (
-                    e: Exception,
-                ) {
-                }
+                } catch (e: Exception) { Log.e("settingsactivity", e) }
             },
             action(
                 "clock",
@@ -1023,6 +1018,7 @@ class SettingsActivity : Activity() {
             ) {
             },
             choice("Photo source", "online_src", "wiki", listOf("wiki" to "Wikimedia Commons: Prayagraj photos", "bing" to "Bing photo of the day (India)", "apod" to "NASA astronomy picture of the day", "picsum" to "Lorem Picsum: free nature and city photos")),
+            sw("Milky Way at night", "Shows stars and the Milky Way in the night wallpaper", "wp_milkyway", true) { Wallpaper.applyAsync(this@SettingsActivity, true) },
             sw("Edge sharpening", "Detects edges and sharpens only them, so photos look crisper (8K feel)", "wp_sharpen", true) { Wallpaper.applyAsync(this@SettingsActivity, true) },
             secret("NASA API key (optional)", { SecureStore.get("nasa") }, { SecureStore.put("nasa", it) }, "Free at api.nasa.gov, removes the shared DEMO_KEY limit"),
             action("refresh", T.teal, "Download photos now", if (Online.credit().isBlank()) "Needs internet. ${Online.files(this@SettingsActivity).size} saved" else Online.credit()) {
@@ -1567,18 +1563,12 @@ class SettingsActivity : Activity() {
             action("bell", T.rose, "Notification access", "Mute distractions, keep important alerts") {
                 try {
                     startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
-                } catch (
-                    e: Exception,
-                ) {
-                }
+                } catch (e: Exception) { Log.e("settingsactivity", e) }
             },
             action("shield", T.plum, "Do Not Disturb access", "For focus mode") {
                 try {
                     startActivity(Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS))
-                } catch (
-                    e: Exception,
-                ) {
-                }
+                } catch (e: Exception) { Log.e("settingsactivity", e) }
             },
             action("bell", T.amber, "App notifications", "Water, timer, backups") {
                 startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, packageName))
@@ -1587,10 +1577,7 @@ class SettingsActivity : Activity() {
                 if (Build.VERSION.SDK_INT >= 31) {
                     try {
                         startActivity(Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.parse("package:$packageName")))
-                    } catch (
-                        _: Exception,
-                    ) {
-                    }
+                    } catch (e: Exception) { Log.e("settingsactivity", e) }
                 }
             },
             action(
@@ -1601,18 +1588,12 @@ class SettingsActivity : Activity() {
             ) {
                 try {
                     startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
-                } catch (
-                    e: Exception,
-                ) {
-                }
+                } catch (e: Exception) { Log.e("settingsactivity", e) }
             },
             action("grid", T.slate, "Set as default home app", "Choose Mission as your launcher") {
                 try {
                     startActivity(Intent(Settings.ACTION_HOME_SETTINGS))
-                } catch (
-                    e: Exception,
-                ) {
-                }
+                } catch (e: Exception) { Log.e("settingsactivity", e) }
             },
         )
         note(
@@ -1804,8 +1785,7 @@ class SettingsActivity : Activity() {
             } catch (e: Exception) {
                 try {
                     startActivity(Intent(Settings.ACTION_SETTINGS))
-                } catch (x: Exception) {
-                }
+                } catch (x: Exception) { Log.e("settingsactivity", x) }
             }
         }
         return listOf(
@@ -1836,6 +1816,10 @@ class SettingsActivity : Activity() {
             Item("Battery: no restrictions", "Hourly sync and reminders on time", pm.isIgnoringBatteryOptimizations(packageName)) {
                 open(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, true)
             },
+            Item("Exact alarms", "Slot reminders and the midnight review on the minute", android.os.Build.VERSION.SDK_INT < 31 || (c.getSystemService(Context.ALARM_SERVICE) as android.app.AlarmManager).canScheduleExactAlarms()) {
+                if (android.os.Build.VERSION.SDK_INT >= 31) open(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, true)
+            },
+            Item("Full-screen gesture permission", "Lets Mission switch off the bottom buttons (one-time adb grant)", c.checkSelfPermission("android.permission.WRITE_SECURE_SETTINGS") == android.content.pm.PackageManager.PERMISSION_GRANTED) { NavGesture.enable(this) },
             Item("Xiaomi Autostart", "Cannot be detected: open and switch Mission on", false) {
                 val tries =
                     listOf(
@@ -1848,8 +1832,7 @@ class SettingsActivity : Activity() {
                         startActivity(i)
                         ok = true
                         break
-                    } catch (e: Exception) {
-                    }
+                    } catch (e: Exception) { Log.e("settingsactivity", e) }
                 }
                 if (!ok) open(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, true)
             },
@@ -1892,6 +1875,7 @@ class SettingsActivity : Activity() {
         group(
             sw("Edge swipe = Back", "Swipe in from the left or right edge, in any app, like the Redmi full-screen gesture. Needs the accessibility service", "edge_nav", true) { CircleService.inst?.updateEdges() },
             sw("Bottom swipe = Home / Recents", "Swipe up from the bottom centre for Home, swipe up and hold for Recents", "edge_bottom", true) { CircleService.inst?.updateEdges() },
+            num("Bottom swipe zone height", "bottom_gesture_edge", 44, 20, 120, "dp", "Higher = easier to catch the Home / Recents swipe"),
             action("gear", T.sage, "Turn on system full-screen gestures", "Removes the bottom navigation buttons of the tablet") { NavGesture.enable(this@SettingsActivity) },
         )
         note("Android has no Forward action, so Back is the edge gesture. Turn on Mission under Accessibility (Circle to Search section) first.")
@@ -1960,6 +1944,7 @@ class SettingsActivity : Activity() {
         val lim = Guard.limits()
         label("Mindful pause")
         group(
+            sw("Mute distracting notifications", "Notifications of distracting apps stay silent (important ones still ring)", "mute_distractions", true),
             sw("Pause before distracting apps", "Short countdown and reminder of days left", "mindful", true),
             num("Pause length", "mindful_secs", 5, 3, 20, "sec"),
             action("grid", T.rose, "Distraction apps", "${Notifs.block().size} apps (also muted when notifying)") {

@@ -278,8 +278,7 @@ object Slot {
         try {
             val ime = Settings.Secure.getString(c.contentResolver, Settings.Secure.DEFAULT_INPUT_METHOD)?.substringBefore('/')
             if (pkg == ime) return true
-        } catch (e: Exception) {
-        }
+        } catch (e: Exception) { Log.e("slot", e) }
         return false
     }
 
@@ -395,8 +394,7 @@ class StrictActivity : Activity() {
                     toast("Mock test break: 2 hours")
                     try {
                         packageManager.getLaunchIntentForPackage(pkg)?.let { startActivity(it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
-                    } catch (e: Exception) {
-                    }
+                    } catch (e: Exception) { Log.e("slot", e) }
                     finish()
                 } else {
                     toast("Wrong code, a new one is shown")
@@ -428,8 +426,7 @@ class StrictActivity : Activity() {
                     toast("Unlocked for ${Store.i("strict_unlock_min", 15)} min")
                     try {
                         packageManager.getLaunchIntentForPackage(pkg)?.let { startActivity(it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
-                    } catch (e: Exception) {
-                    }
+                    } catch (e: Exception) { Log.e("slot", e) }
                     finish()
                 } else {
                     toast("Wrong code, a new one is shown")

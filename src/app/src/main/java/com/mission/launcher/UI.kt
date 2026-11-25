@@ -830,25 +830,19 @@ fun android.app.Activity.systemBars(bg: Int? = null) {
     try {
         window.isNavigationBarContrastEnforced = false
         window.isStatusBarContrastEnforced = false
-    } catch (e: Throwable) {
-    }
+    } catch (e: Throwable) { Log.e("ui", e) }
     val apply = {
         try {
             val m = android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS or android.view.WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS
             window.insetsController?.setSystemBarsAppearance(if (T.dark) 0 else m, m)
-        } catch (
-            e: Throwable,
-        ) {
-        }
+        } catch (e: Throwable) { Log.e("ui", e) }
     }
     try {
         window.decorView.post { apply() }
-    } catch (e: Throwable) {
-    }
+    } catch (e: Throwable) { Log.e("ui", e) }
     try {
         window.decorView.postDelayed({ apply() }, 300)
-    } catch (e: Throwable) {
-    }
+    } catch (e: Throwable) { Log.e("ui", e) }
 }
 
 fun Context.toast(s: String) = Toast.makeText(this, s, Toast.LENGTH_SHORT).show()

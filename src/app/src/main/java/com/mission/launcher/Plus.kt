@@ -42,8 +42,7 @@ object Plus {
                         big.text = "Time up"
                         try {
                             (c.getSystemService(Context.VIBRATOR_SERVICE) as android.os.Vibrator).vibrate(android.os.VibrationEffect.createOneShot(600, 255))
-                        } catch (e: Exception) {
-                        }
+                        } catch (e: Exception) { Log.e("plus", e) }
                     }
                 }.start()
             Dlg.view(c, "Answer timer", box, "Done, count it") {
@@ -92,8 +91,7 @@ object Plus {
             c.toast("Allow 'Display over other apps' for Mission")
             try {
                 c.startActivity(Intent(android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION, android.net.Uri.parse("package:" + c.packageName)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-            } catch (e: Exception) {
-            }
+            } catch (e: Exception) { Log.e("plus", e) }
             return
         }
         Dlg.choose(c, "Floating mock timer", listOf("GS Paper 1: 120 min", "CSAT: 120 min", "Sectional: 60 min", "Half test: 30 min")) { i ->

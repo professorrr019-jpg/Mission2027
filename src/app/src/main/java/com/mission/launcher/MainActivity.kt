@@ -322,8 +322,7 @@ class MainActivity : Activity(), Host {
         Store.listeners.remove(listener)
         try {
             unregisterReceiver(pkgReceiver)
-        } catch (e: Exception) {
-        }
+        } catch (e: Exception) { Log.e("mainactivity", e) }
         ui.removeCallbacks(refreshRun)
         ui.removeCallbacks(edgeHide)
         rightPanel?.let(root::removeView)
@@ -338,16 +337,14 @@ class MainActivity : Activity(), Host {
         super.onStart()
         try {
             widgetHost.startListening()
-        } catch (e: Exception) {
-        }
+        } catch (e: Exception) { Log.e("mainactivity", e) }
     }
 
     override fun onStop() {
         super.onStop()
         try {
             widgetHost.stopListening()
-        } catch (e: Exception) {
-        }
+        } catch (e: Exception) { Log.e("mainactivity", e) }
         Store.flushNow()
     }
 
@@ -1314,8 +1311,8 @@ class MainActivity : Activity(), Host {
                     Thread {
                         val n = try { Cleaner.run(this, 0) } catch (e: Exception) { 0 }
                         var kb = 0L
-                        try { cacheDir.listFiles()?.forEach { f -> kb += f.length(); f.deleteRecursively() } } catch (e: Exception) { }
-                        try { Apps.iconCacheClear?.invoke(); Backdrop.clear() } catch (e: Exception) { }
+                        try { cacheDir.listFiles()?.forEach { f -> kb += f.length(); f.deleteRecursively() } } catch (e: Exception) { Log.e("mainactivity", e) }
+                        try { Apps.iconCacheClear?.invoke(); Backdrop.clear() } catch (e: Exception) { Log.e("mainactivity", e) }
                         runOnUiThread { toast("Cache ${kb / 1024} KB cleared, $n apps stopped") }
                     }.start()
                 },
@@ -1501,7 +1498,6 @@ class MainActivity : Activity(), Host {
         if (!Store.b("wp_parallax", true) || pager.count < 2) return
         try {
             WallpaperManager.getInstance(this).setWallpaperOffsets(root.windowToken, p / (pager.count - 1), 0.5f)
-        } catch (e: Exception) {
-        }
+        } catch (e: Exception) { Log.e("mainactivity", e) }
     }
 }

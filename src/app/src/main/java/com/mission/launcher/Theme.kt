@@ -208,7 +208,6 @@ object T {
         try {
             v.outlineAmbientShadowColor = shadow
             v.outlineSpotShadowColor = shadow
-        } catch (e: Throwable) {
-        }
+        } catch (e: Throwable) { Log.e("theme", e) }
     }
 }
