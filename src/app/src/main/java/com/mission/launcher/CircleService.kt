@@ -2,6 +2,7 @@ package com.mission.launcher
 
 import android.accessibilityservice.AccessibilityButtonController
 import android.accessibilityservice.AccessibilityService
+import android.accessibilityservice.AccessibilityServiceInfo
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.app.ActivityOptions
@@ -328,9 +329,13 @@ class CircleService : AccessibilityService() {
                         closeOverlay()
                     } else if (Store.s("circle_target", "lens") == "gemini" && sendToGemini(crop)) {
                         closeOverlay()
-                    } else if (Store.s("circle_target", "lens") == "lens" && saveImage(crop) != null) {
+                    } else if (Store.s("circle_target", "lens") == "lens") {
                         closeOverlay()
-                        sendToLens(saveImage(crop)!!)
+                        toast("Opening Google Lens...")
+                        Thread {
+                            val u = saveImage(crop)
+                            ui.post { if (u != null) sendToLens(u) else showResult(crop) }
+                        }.start()
                     } else {
                         closeOverlay()
                         showResult(crop)
@@ -469,6 +474,7 @@ class CircleService : AccessibilityService() {
             }
             val ob = o.toBundle() ?: Bundle()
             if (Store.b("circle_float", true)) ob.putInt("android.activity.windowingMode", 5)
+            Slot.grantUntil = System.currentTimeMillis() + 4 * 60000L
             if (Store.b("circle_float", true)) {
                 // Step 1: open Gemini itself in the small floating window. Step 2: send the image into that same task,
                 // so Gemini cannot bounce it into a second full-screen task (which made the floating window vanish).
@@ -549,8 +555,14 @@ class CircleService : AccessibilityService() {
     }
 
     private fun autoSend(n: Int) {
-        if (n == 0) typedAt = -1
-        if (n > 60 || !Store.b("circle_autosend", true)) return
+        if (n == 0) {
+            typedAt = -1
+            detail(true)
+        }
+        if (n > 60 || !Store.b("circle_autosend", true)) {
+            detail(false)
+            return
+        }
         ui.postDelayed({
             var done = false
             try {
@@ -579,7 +591,7 @@ class CircleService : AccessibilityService() {
             } catch (e: Exception) {
                 Log.e("circle-auto", e)
             }
-            if (!done) autoSend(n + 1)
+            if (!done) autoSend(n + 1) else detail(false)
         }, 600)
     }
 
@@ -666,6 +678,7 @@ class CircleService : AccessibilityService() {
             }
             val ob = o.toBundle() ?: Bundle()
             if (Store.b("circle_float", true)) ob.putInt("android.activity.windowingMode", 5)
+            Slot.grantUntil = System.currentTimeMillis() + 4 * 60000L
             startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), ob)
             toast("Google Lens  -  $TAG")
             checkFloat()
@@ -707,12 +720,33 @@ class CircleService : AccessibilityService() {
         return t != null && t.performAction(AccessibilityNodeInfo.ACTION_CLICK)
     }
 
+    /**
+     * The service watches only window changes (light on every app). While Lens / Gemini is being automated, it also reports
+     * view ids and not-important views so the search box and buttons can be found; this is switched off again afterwards.
+     */
+    private fun detail(on: Boolean) {
+        try {
+            val info = serviceInfo ?: return
+            val f = AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS or AccessibilityServiceInfo.FLAG_INCLUDE_NOT_IMPORTANT_VIEWS
+            info.flags = if (on) info.flags or f else info.flags and f.inv()
+            serviceInfo = info
+        } catch (e: Throwable) {
+            Log.e("circle-detail", e)
+        }
+    }
+
     private var lensTyped = -1
 
     /** Lens opens by itself: open "Add to your search", type the tag, press search. Polls for about 40 seconds. */
     private fun lensAuto(n: Int) {
-        if (n == 0) lensTyped = -1
-        if (n > 65 || !Store.b("circle_autosend", true)) return
+        if (n == 0) {
+            lensTyped = -1
+            detail(true)
+        }
+        if (n > 65 || !Store.b("circle_autosend", true)) {
+            detail(false)
+            return
+        }
         ui.postDelayed({
             var done = false
             try {
@@ -750,7 +784,7 @@ class CircleService : AccessibilityService() {
             } catch (e: Exception) {
                 Log.e("circle-lens-auto", e)
             }
-            if (!done) lensAuto(n + 1)
+            if (!done) lensAuto(n + 1) else detail(false)
         }, 600)
     }
 

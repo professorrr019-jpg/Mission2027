@@ -39,6 +39,9 @@ object Slot {
     /** Foreground app seen by the accessibility service (for the timer label). */
     @Volatile var fgPkg: String = ""
 
+    /** After a circle search, result links (browser, custom tabs) may open for a few minutes without being blocked by strict focus. */
+    @Volatile var grantUntil: Long = 0L
+
     fun pending(c: Context, t: Targets.JSONObject2): List<String> {
         val done = Syl.doneSet()
         val back = Review.backlogKeys()
@@ -273,6 +276,7 @@ object Slot {
         if (pkg == c.packageName || pkg == "android" || pkg == "com.android.systemui") return true
         if (pkg in CircleService.GEMINI_PACKAGES || pkg in CircleService.LENS_PACKAGES) return true
         if (pkg in Apps.pins() || pkg in Apps.study() || Apps.allowedInFocus(c, pkg)) return true
+        if (System.currentTimeMillis() < grantUntil && listOf("chrome", "browser", "firefox", "webview", "customtabs", "opera", "brave", "edge", "duckduckgo").any { pkg.contains(it) }) return true
         val keep = listOf("telecom", "dialer", "incallui", "permissioncontroller", "inputmethod", "keyboard", "com.miui.home", "com.android.launcher", "com.miui.notification", "com.miui.systemui", "com.android.packageinstaller", "packageinstaller", "com.google.android.gms", "com.android.documentsui", "com.android.providers", "com.google.android.documentsui")
         if (keep.any { pkg.contains(it) }) return true
         try {
