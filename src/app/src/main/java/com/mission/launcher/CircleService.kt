@@ -67,6 +67,16 @@ class CircleService : AccessibilityService() {
                 "com.google.android.apps.googleassistant",
             )
 
+        /** Packages that currently have a window on screen (needs the accessibility service). */
+        fun visiblePackages(): Set<String> {
+            val svc = inst ?: return emptySet()
+            return try {
+                svc.windows.mapNotNull { it.root?.packageName?.toString() }.toSet()
+            } catch (e: Exception) {
+                emptySet()
+            }
+        }
+
         val LENS_PACKAGES = listOf("com.google.android.googlequicksearchbox", "com.google.ar.lens")
 
         /** Prompt that travels with every circled image (editable in Settings > Circle to Search). */

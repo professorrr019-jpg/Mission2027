@@ -30,6 +30,9 @@ object Cleaner {
             } catch (e: Exception) { Log.e("cleaner", e) }
         }
         out.addAll(Store.stringList("clean_keep"))
+        // every app that has a window on screen right now (split screen, floating windows, picture-in-picture)
+        try { out.addAll(CircleService.visiblePackages()) } catch (e: Exception) { Log.e("cleaner-visible", e) }
+        Slot.fgPkg.takeIf { it.isNotBlank() }?.let { out.add(it) }
         return out
     }
 

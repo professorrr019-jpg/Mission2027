@@ -76,7 +76,7 @@ object PyqUi {
         var dlg: android.app.AlertDialog? = null
 
         fun visible(): List<Pyq.M> =
-            Pyq.subjects.filter { subjF.isEmpty() || it.idx in subjF }.flatMap { it.micros }.filter { m ->
+            Pyq.withPractice.filter { subjF.isEmpty() || it.idx in subjF }.flatMap { it.micros }.filter { m ->
                 (allow == null || m.key in allow) &&
                     (tierF == 0 || m.tier == tierF) &&
                     (!pendOnly || m.key !in done) &&
@@ -94,8 +94,8 @@ object PyqUi {
                 }
             filters.addView(a.chipRow(*tiers.toTypedArray()))
             val subs =
-                Pyq.subjects.filter { s -> allow == null || s.micros.any { it.key in allow } }.map { s ->
-                    chip(a, Syl.short(s.name), s.color, s.idx in subjF).apply { tap(false) { if (!subjF.add(s.idx)) subjF.remove(s.idx); render() } }
+                Pyq.withPractice.filter { s -> allow == null || s.micros.any { it.key in allow } }.map { s ->
+                    chip(a, if (s.practice) "PYQ Practice" else Syl.short(s.name), s.color, s.idx in subjF).apply { tap(false) { if (!subjF.add(s.idx)) subjF.remove(s.idx); render() } }
                 } + chip(a, if (pendOnly) "Pending only" else "Show done too", T.text2, pendOnly).apply { tap(false) { pendOnly = !pendOnly; render() } }
             filters.addView(a.chipRow(*subs.toTypedArray()), lp(-1, -2, 6))
         }

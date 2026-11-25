@@ -120,7 +120,7 @@ object Cards {
                 "prelims" -> prelims(h)
                 "mockstats" -> mockStats(h)
                 "zite" -> ziteCard(h)
-                "ai" -> aiCard(h)
+                "ai" -> if (Ai.chatEnabled()) aiCard(h) else null
                 "notes" -> notes(h)
                 "usage" -> usage(h)
                 "links" -> links(h)

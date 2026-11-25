@@ -21,10 +21,12 @@ object Pyq {
         fun byYear(): Map<Int, Int> = qs.groupingBy { it.year }.eachCount()
     }
 
-    class S(val name: String, val idx: Int, val micros: List<M>) {
+    class S(val name: String, val idx: Int, val micros: List<M>, val practice: Boolean = false) {
         val total: Int get() = micros.sumOf { it.total }
-        val color: Int get() = T.palette[idx % T.palette.size]
+        val color: Int get() = if (practice) T.gold else T.palette[idx % T.palette.size]
     }
+
+    const val PRACTICE = "PYQ Practice"
 
     const val Y15 = 2012
     const val Y5 = 2022
@@ -34,6 +36,13 @@ object Pyq {
     @Volatile var years: List<Int> = emptyList()
         private set
     val ready: Boolean get() = subjects.isNotEmpty()
+
+    /** Virtual subject "PYQ Practice": whole-subject sets and full yearly papers, so PYQ practice can be added to a target like any topic. */
+    @Volatile var practice: S? = null
+        private set
+
+    /** Syllabus subjects plus the PYQ Practice subject, for topic pickers. */
+    val withPractice: List<S> get() = subjects + listOfNotNull(practice)
 
     private val byKey = HashMap<String, M>()
 
@@ -71,6 +80,15 @@ object Pyq {
                     }
                     list.add(S(sn, si, ms))
                 }
+                val pm = ArrayList<M>()
+                list.forEach { sj -> pm.add(M(PRACTICE, list.size, "${sj.name}: all PYQs 2007-2026", emptyList(), sj.micros.flatMap { it.qs })) }
+                yl.sortedDescending().forEach { y ->
+                    pm.add(M(PRACTICE, list.size, "Prelims $y: full GS paper", emptyList(), list.flatMap { sj -> sj.micros.flatMap { m -> m.qs.filter { it.year == y } } }))
+                }
+                list.forEach { sj -> pm.add(M(PRACTICE, list.size, "${sj.name}: last 5 years PYQs", emptyList(), sj.micros.flatMap { m -> m.qs.filter { it.year >= Y5 } })) }
+                val ps = S(PRACTICE, list.size, pm, true)
+                pm.forEach { byKey[it.key] = it }
+                practice = ps
                 years = yl
                 subjects = list
             } catch (e: Exception) {
@@ -81,7 +99,7 @@ object Pyq {
 
     fun micro(key: String): M? = byKey[key]
 
-    fun subject(name: String): S? = subjects.firstOrNull { it.name == name } ?: subjects.firstOrNull { sameSubject(it.name, name) }
+    fun subject(name: String): S? = if (name == PRACTICE) practice else (subjects.firstOrNull { it.name == name } ?: subjects.firstOrNull { sameSubject(it.name, name) })
 
     fun colorOf(subjectName: String): Int = subject(subjectName)?.color ?: T.accent
 

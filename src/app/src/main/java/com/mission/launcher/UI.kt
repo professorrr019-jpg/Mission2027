@@ -822,7 +822,7 @@ fun android.app.Activity.systemBars(bg: Int? = null) {
     window.setDecorFitsSystemWindows(false)
     if (bg != null) {
         window.statusBarColor = bg
-        window.navigationBarColor = bg
+        window.navigationBarColor = android.graphics.Color.TRANSPARENT
     } else {
         window.statusBarColor = android.graphics.Color.TRANSPARENT
         window.navigationBarColor = android.graphics.Color.TRANSPARENT

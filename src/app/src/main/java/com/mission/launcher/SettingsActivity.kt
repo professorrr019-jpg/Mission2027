@@ -717,6 +717,11 @@ class SettingsActivity : Activity() {
     private fun LinearLayout.ai() {
         val c = this@SettingsActivity
         val p = Ai.provider()
+        label("What AI does")
+        group(
+            sw("AI morning + evening briefing", "AI writes your two daily briefings (uses your key). Off = plain local text", "ai_brief", true),
+            sw("AI chat and search answers", "Off (recommended): AI is used only for the two briefings", "ai_chat", false) { redraw() },
+        )
         label("Provider")
         group(
             value("Active provider", null, p.name) {
@@ -1842,6 +1847,18 @@ class SettingsActivity : Activity() {
     private fun LinearLayout.setup() {
         val items = setupItems()
         note("Tap any row marked Fix. This screen refreshes when you come back.")
+        group(
+            action("checkc", T.sage, "Allow everything (guided)", "${items.count { !it.ok }} still to allow. Each tap opens the next missing permission") {
+                val rt = listOf(android.Manifest.permission.POST_NOTIFICATIONS, android.Manifest.permission.RECORD_AUDIO, android.Manifest.permission.READ_CALENDAR)
+                val missing = rt.filter { checkSelfPermission(it) != android.content.pm.PackageManager.PERMISSION_GRANTED }
+                if (missing.isNotEmpty()) {
+                    requestPermissions(missing.toTypedArray(), 9)
+                } else {
+                    val next = items.firstOrNull { !it.ok }
+                    if (next == null) toast("Everything is allowed") else { toast(next.title); next.fix() }
+                }
+            },
+        )
         group(
             *items.map {
                     it ->

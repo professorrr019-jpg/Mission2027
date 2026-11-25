@@ -1470,6 +1470,10 @@ class MainActivity : Activity(), Host {
 
     // ---------- Host ----------
     override fun openChat(prefill: String?) {
+        if (!Ai.chatEnabled()) {
+            toast("AI is used only for the morning and evening briefing. Turn on AI chat in Settings > AI if you want it.")
+            return
+        }
         startActivity(Intent(this, ChatActivity::class.java).apply { if (prefill != null) putExtra("q", prefill) })
     }
 

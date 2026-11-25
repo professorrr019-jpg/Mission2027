@@ -377,8 +377,8 @@ class StrictActivity : Activity() {
             },
             lp(-2, -2, 18),
         )
-        box.addView(text("Mock test break (2 hours)", 13f, 2, T.textAccent(T.amber)), lp(-2, -2, 26))
-        box.addView(text("Only for taking a mock test. Type this code exactly; strict focus pauses for 2 hours.", 12f, 0, T.text3), lp(-2, -2, 6))
+        box.addView(text("2 hour break (mock test)", 14f, 3, T.textAccent(T.amber)), lp(-2, -2, 26))
+        box.addView(text("This is the only exit. Meant for taking a mock test. Type this code exactly; strict focus pauses for 2 hours.", 12f, 0, T.text3), lp(-2, -2, 6))
         val mockShown =
             text(mockCode, 22f, 3, T.text).apply {
                 typeface = Typeface.MONOSPACE
@@ -409,38 +409,7 @@ class StrictActivity : Activity() {
             },
             lp(-2, -2, 10),
         )
-        box.addView(text("Emergency exit", 13f, 2, T.textAccent(T.danger)), lp(-2, -2, 26))
-        box.addView(text("Type this code exactly to unlock for ${Store.i("strict_unlock_min", 15)} minutes:", 12f, 0, T.text3), lp(-2, -2, 6))
-        val shown =
-            text(code, 22f, 3, T.text).apply {
-                typeface = Typeface.MONOSPACE
-                letterSpacing = 0.12f
-                setTextIsSelectable(false)
-                isLongClickable = false
-            }
-        box.addView(shown, lp(-2, -2, 8))
-        val f = Dlg.field(this, "Type the code here", "")
-        f.isSingleLine = true
-        box.addView(f, lp(-1, -2, 8))
-        box.addView(
-            pill("Unlock", "lock", false, T.danger) {
-                if (f.text.toString().trim() == code) {
-                    Store.put("strict_off_until", System.currentTimeMillis() + Store.i("strict_unlock_min", 15).coerceIn(5, 60) * 60000L)
-                    Store.put("strict_is_mock", false)
-                    toast("Unlocked for ${Store.i("strict_unlock_min", 15)} min")
-                    try {
-                        packageManager.getLaunchIntentForPackage(pkg)?.let { startActivity(it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
-                    } catch (e: Exception) { Log.e("slot", e) }
-                    finish()
-                } else {
-                    toast("Wrong code, a new one is shown")
-                    code = Slot.newCode()
-                    f.setText("")
-                    shown.text = code
-                }
-            },
-            lp(-2, -2, 10),
-        )
+        box.addView(text("There is no other way out: finish the timer, or take the 2 hour break above.", 12f, 0, T.text3), lp(-2, -2, 22))
         setContentView(android.widget.ScrollView(this).apply { addView(box) })
     }
 

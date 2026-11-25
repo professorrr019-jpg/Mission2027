@@ -611,7 +611,7 @@ class DrawerView(val a: Activity, val onClose: () -> Unit) : FrameLayout(a) {
             hits.add(row("checkc", T.sage, t.optString("text"), "Task - " + t.optString("date")) { close() })
         }
         hits.take(4).forEach { extra.addView(it, lp(-1, -2, 4)) }
-        if (shown.isEmpty() || hits.isNotEmpty() || query.length >= 3) {
+        if (Ai.chatEnabled() && (shown.isEmpty() || hits.isNotEmpty() || query.length >= 3)) {
             extra.addView(
                 row("sparkle", T.plum, "Ask Mission AI", query) {
                     close()

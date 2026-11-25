@@ -190,6 +190,24 @@ object Briefs {
         }
     }
 
+    /** Morning / evening brief: local text first; if an AI key is set the AI rewrites it as a short personal briefing. */
+    private fun briefAi(c: Context, id: Int, title: String, text: String, kind: String) {
+        if (!Store.b("ai_brief", true) || !Ai.ready()) {
+            post(c, id, title, text)
+            return
+        }
+        Thread {
+            val out =
+                try {
+                    Ai.oneShot(c, "Make this $kind briefing short, motivating and specific. Facts only from this data:\n$text").trim().take(420)
+                } catch (e: Exception) {
+                    Log.e("brief-ai", e)
+                    ""
+                }
+            post(c, id, title, if (out.length > 20) out else text)
+        }.start()
+    }
+
     fun tick(c: Context) {
         val date = LocalDate.now(Repo.zone())
         val h = LocalTime.now(Repo.zone()).hour
@@ -199,7 +217,7 @@ object Briefs {
             Store.put("brief_m_day", today)
             val tasks = Repo.tasksFor(date)
             val rev = Repo.revisionsDue().size
-            post(
+            briefAi(
                 c,
                 6101,
                 "Good morning - $days days to Prelims",
@@ -213,6 +231,7 @@ object Briefs {
                             }
                     }
                 ) + (if (rev > 0) "\n$rev topics to revise." else "") + "\nWater goal ${Water.goal()} ml. Study streak ${Repo.streak()} days.",
+                "morning",
             )
         }
         if (Store.b("brief_e_on", true) && h == Store.i("brief_e_hour", 21) && Store.s("brief_e_day") != today) {
@@ -220,11 +239,12 @@ object Briefs {
             val goal = Store.i("study_goal_min", 360)
             val done = Repo.minutesOn(date)
             val open = Repo.tasksFor(date).count { !it.optBoolean("done") }
-            post(
+            briefAi(
                 c,
                 6102,
                 if (done >= goal) "Goal reached - well done" else "Evening check-in",
                 "Studied ${fmtMins(done)} of ${fmtMins(goal)}." + (if (open > 0) " $open tasks still open." else "") + (if (done < goal) " A 25-minute block still counts." else " Plan tomorrow in two minutes."),
+                "evening",
             )
         }
         if (Store.b("brief_w_on", true) && date.dayOfWeek == java.time.DayOfWeek.SUNDAY && h == Store.i("brief_e_hour", 21) && Store.s("brief_w_day") != today) {

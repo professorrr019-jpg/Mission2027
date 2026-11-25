@@ -170,6 +170,16 @@ object Ai {
 
     // ---------- public API ----------
 
+    /** AI chat is switched off by default: AI is used only for the morning and evening briefing. */
+    fun chatEnabled(): Boolean = Store.b("ai_chat", false)
+
+    /** One stateless request (not saved in the chat history). Blocking: background thread only. */
+    fun oneShot(c: Context, prompt: String): String {
+        val p = provider()
+        if (!ready(p)) throw Exception("No AI key")
+        return raw(listOf("user" to prompt), "You write short, warm, accurate study briefings for a UPSC Prelims 2027 aspirant. Hinglish (Hindi in Roman letters). No markdown, max 4 short lines.", false, c)
+    }
+
     /** Blocking. Call from a background thread. */
     fun ask(
         c: Context,

@@ -51,6 +51,11 @@ class Pager(c: Context) : FrameLayout(c) {
         applyPos()
     }
 
+    /** Pages are cached as GPU layers only while they move, so swiping stays smooth and idle pages use no extra memory. */
+    private fun layers(on: Boolean) {
+        for (i in 0 until childCount) getChildAt(i).setLayerType(if (on) LAYER_TYPE_HARDWARE else LAYER_TYPE_NONE, null)
+    }
+
     private fun applyPos() {
         val w = width.toFloat()
         for (i in 0 until childCount) {
@@ -78,6 +83,7 @@ class Pager(c: Context) : FrameLayout(c) {
             ValueAnimator.ofFloat(pos, t.toFloat()).apply {
                 duration = 260
                 interpolator = DecelerateInterpolator(1.6f)
+                layers(true)
                 addUpdateListener {
                     pos = it.animatedValue as Float
                     applyPos()
@@ -85,6 +91,7 @@ class Pager(c: Context) : FrameLayout(c) {
                 addListener(
                     object : android.animation.AnimatorListenerAdapter() {
                         override fun onAnimationEnd(a: android.animation.Animator) {
+                            layers(false)
                             onSettled?.invoke(t)
                         }
                     },
@@ -111,6 +118,7 @@ class Pager(c: Context) : FrameLayout(c) {
                 val dy = e.y - dy0
                 if (!drag && abs(dx) > slop * 1.5f && abs(dx) > abs(dy) * 1.4f) {
                     drag = true
+                    layers(true)
                     parent?.requestDisallowInterceptTouchEvent(true)
                 }
             }

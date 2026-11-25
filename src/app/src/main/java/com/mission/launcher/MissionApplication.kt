@@ -18,12 +18,55 @@ class MissionApplication : Application() {
         installCrashLogger()
         Backdrop.ctx = applicationContext
         Thread { try { Pyq.load(applicationContext) } catch (e: Exception) { android.util.Log.e("pyq", "load", e) } }.start()
+        registerNavBarCallbacks()
         MissionSyncWorker.schedule(this)
         NotificationDigestWorker.setEnabled(this, FeatureRegistry.enabled("x20_notification_digest"))
         if (BuildConfig.DEBUG) {
             StrictMode.setThreadPolicy(StrictMode.ThreadPolicy.Builder().detectAll().penaltyLog().build())
             StrictMode.setVmPolicy(StrictMode.VmPolicy.Builder().detectAll().penaltyLog().build())
         }
+    }
+
+    /** Every Mission screen: fully transparent navigation bar; if "Hide bottom navigation bar" is on, it hides again 5 seconds after it appears. */
+    private fun registerNavBarCallbacks() {
+        val h = android.os.Handler(android.os.Looper.getMainLooper())
+        registerActivityLifecycleCallbacks(object : android.app.Application.ActivityLifecycleCallbacks {
+            private fun style(a: android.app.Activity) {
+                try {
+                    a.window.navigationBarColor = android.graphics.Color.TRANSPARENT
+                    a.window.isNavigationBarContrastEnforced = false
+                    if (!Store.b("hide_nav", true)) return
+                    val ic = a.window.insetsController ?: return
+                    ic.systemBarsBehavior = android.view.WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                    a.window.decorView.setOnApplyWindowInsetsListener { v, ins ->
+                        if (ins.isVisible(android.view.WindowInsets.Type.navigationBars())) {
+                            h.removeCallbacksAndMessages(a)
+                            h.postAtTime({ try { a.window.insetsController?.hide(android.view.WindowInsets.Type.navigationBars()) } catch (e: Throwable) { } }, a, android.os.SystemClock.uptimeMillis() + 5000L)
+                        }
+                        v.onApplyWindowInsets(ins)
+                    }
+                    ic.hide(android.view.WindowInsets.Type.navigationBars())
+                } catch (e: Throwable) {
+                    android.util.Log.e("MissionLauncher", "nav style", e)
+                }
+            }
+
+            override fun onActivityResumed(a: android.app.Activity) = style(a)
+
+            override fun onActivityCreated(a: android.app.Activity, b: android.os.Bundle?) {}
+
+            override fun onActivityStarted(a: android.app.Activity) {}
+
+            override fun onActivityPaused(a: android.app.Activity) {
+                h.removeCallbacksAndMessages(a)
+            }
+
+            override fun onActivityStopped(a: android.app.Activity) {}
+
+            override fun onActivitySaveInstanceState(a: android.app.Activity, b: android.os.Bundle) {}
+
+            override fun onActivityDestroyed(a: android.app.Activity) {}
+        })
     }
 
     override fun onTrimMemory(level: Int) {
