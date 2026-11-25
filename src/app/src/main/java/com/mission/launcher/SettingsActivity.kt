@@ -853,7 +853,6 @@ class SettingsActivity : Activity() {
             sw("Strict focus during a slot", "While a target's study slot is open only study apps and pinned apps work. Needs the accessibility service (Circle to Search section)", "strict_slot", true),
             sw("Review after each study session", "After Save: mark topics Complete / Backlog / Revise and write notes (mandatory in strict focus)", "review_after_session", true),
             sw("Strict focus while a timer runs", "Study timer ON = only study apps, pinned apps and Gemini/Lens work. Mock test break and emergency code can pause it", "strict_timer", true),
-            num("Emergency unlock time", "strict_unlock_min", 15, 5, 60, "min", "Typing the random 15 character code unlocks for this long"),
         )
         note("Settings and every other app are blocked in the slot. Add your study apps in Study apps, and pin the ones you need on the dock.")
         label("Timer")
