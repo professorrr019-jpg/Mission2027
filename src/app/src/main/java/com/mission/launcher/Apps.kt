@@ -557,6 +557,21 @@ class DrawerView(val a: Activity, val onClose: () -> Unit) : FrameLayout(a) {
             return
         }
         if (query.length < 2) return
+        Calc.eval(query)?.let { res ->
+            extra.addView(
+                a.hbox().apply {
+                    padDp(14, 10, 14, 10)
+                    background = T.round(T.card, 14)
+                    addView(a.text(query.trim() + " =", 12.5f, 1, T.text2), LinearLayout.LayoutParams(0, -2, 1f))
+                    addView(a.text(res, 17f, 3, T.text))
+                    tap {
+                        (a.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager).setPrimaryClip(android.content.ClipData.newPlainText("result", res))
+                        a.toast("Copied $res")
+                    }
+                },
+                lp(-1, -2, 4),
+            )
+        }
 
         fun row(
             ic: String,
