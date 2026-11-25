@@ -186,7 +186,12 @@ object T {
         GradientDrawable().apply {
             setColor(color)
             cornerRadius = dpf(r.toFloat())
-            if (stroke > 0) setStroke(stroke, strokeColor)
+            if (stroke > 0) {
+                setStroke(stroke, strokeColor)
+            } else if (r >= 10 && (color == card || color == cardSolid)) {
+                // crisp hairline edge (1 physical pixel) so card edges stay sharp on any background
+                setStroke(1, if (dark) 0x30FFFFFF else 0x1F2B2418)
+            }
         }
 
     fun elevate(
@@ -202,7 +207,7 @@ object T {
                     o: Outline,
                 ) {
                     o.setRoundRect(0, 0, view.width, view.height, dpf(radius.toFloat()))
-                    o.alpha = 0.9f
+                    o.alpha = 0.8f
                 }
             }
         try {
