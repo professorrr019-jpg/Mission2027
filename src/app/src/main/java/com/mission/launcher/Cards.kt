@@ -1751,7 +1751,7 @@ object Cards {
         listOf(
             tile("note", "Review log", T.plum) { Review.log(h.act) },
             tile("checkc", "Review now", T.sage) { Review.launch(c, "daily", java.time.LocalDate.now()) },
-            tile("split", "Split view", T.teal) { Split.pick(h.act) },
+            tile("search", "Circle history", T.teal) { CircleService.history(h.act) },
         ).forEach { r3c.addView(it, lpm(0, -2, 0, 0, 8, 0, 1f)) }
         card.addView(r3c, lp(-1, -2, 8))
         val r4 = c.hbox(false)

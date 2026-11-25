@@ -60,12 +60,40 @@ class CircleService : AccessibilityService() {
         }
 
         const val TAG = "UPSC Prelims 2027"
+
+        /** The search tag typed into Lens: your own tag text, plus the subject of the running timer. */
+        fun tagNow(): String {
+            val base = Store.s("circle_tag_text").ifBlank { TAG }
+            if (!Store.b("circle_subject", true) || !TimerState.active()) return base
+            val subj = Syl.short(TimerState.subject())
+            return if (subj.isBlank() || base.contains(subj, true)) base else "$base $subj"
+        }
+
+        @Volatile var lensTag: String = TAG
         const val GEMINI = "com.google.android.apps.bard"
         val GEMINI_PACKAGES =
             listOf(
                 GEMINI,
                 "com.google.android.apps.googleassistant",
             )
+
+        /** Last circled images: tap one to search it again with the tag. */
+        fun history(a: android.app.Activity) {
+            val rows = Store.rows("circle_hist").sortedByDescending { it.optLong("t") }.take(20)
+            if (rows.isEmpty()) {
+                a.toast("No circle searches yet")
+                return
+            }
+            val labels =
+                rows.map {
+                    val app = try { a.packageManager.getApplicationLabel(a.packageManager.getApplicationInfo(it.optString("app"), 0)).toString() } catch (e: Exception) { "screen" }
+                    java.text.SimpleDateFormat("dd MMM HH:mm", java.util.Locale.getDefault()).format(java.util.Date(it.optLong("t"))) + "  -  " + app
+                }.toTypedArray()
+            Dlg.builder(a).setTitle("Circle search history").setItems(labels) { _, i ->
+                val u = Uri.parse(rows[i].optString("uri"))
+                inst?.sendToLens(u) ?: a.toast("Turn on the accessibility service first")
+            }.setNegativeButton("Close", null).show()
+        }
 
         /** Packages that currently have a window on screen (needs the accessibility service). */
         fun visiblePackages(): Set<String> {
@@ -276,6 +304,7 @@ class CircleService : AccessibilityService() {
 
     fun snap() {
         if (overlay != null) return
+        lensSource = Slot.fgPkg
         try {
             takeScreenshot(
                 Display.DEFAULT_DISPLAY,
@@ -430,13 +459,13 @@ class CircleService : AccessibilityService() {
         try {
             val cv =
                 ContentValues().apply {
-                    put(MediaStore.Images.Media.DISPLAY_NAME, "mission_circle_${System.currentTimeMillis()}.png")
-                    put(MediaStore.Images.Media.MIME_TYPE, "image/png")
+                    put(MediaStore.Images.Media.DISPLAY_NAME, "mission_circle_${System.currentTimeMillis()}.jpg")
+                    put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
                     put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/Mission")
                     put(MediaStore.Images.Media.IS_PENDING, 1)
                 }
             val u = contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, cv)!!
-            contentResolver.openOutputStream(u)!!.use { bm.compress(Bitmap.CompressFormat.PNG, 100, it) }
+            contentResolver.openOutputStream(u)!!.use { bm.compress(Bitmap.CompressFormat.JPEG, 95, it) }
             cv.clear()
             cv.put(MediaStore.Images.Media.IS_PENDING, 0)
             contentResolver.update(u, cv, null, null)
@@ -661,9 +690,11 @@ class CircleService : AccessibilityService() {
     }
 
     /** Circled image into Google Lens, in a small floating window, with the "UPSC Prelims 2027" tag typed and searched by itself. */
-    private fun sendToLens(u: Uri) {
+    fun sendToLens(u: Uri, retry: Boolean = true) {
+        lensTag = tagNow()
+        val source = lensSource
         try {
-            (getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("UPSC tag", TAG))
+            (getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("UPSC tag", lensTag))
         } catch (e: Exception) { Log.e("circleservice", e) }
         val cands = ArrayList<Intent>()
         cands.add(intentFor(u).setClassName("com.google.android.googlequicksearchbox", "com.google.android.apps.search.lens.LensShareEntryPointActivity"))
@@ -679,8 +710,13 @@ class CircleService : AccessibilityService() {
                 val dm = resources.displayMetrics
                 val w = (dm.widthPixels * Store.i("circle_w", 42).coerceIn(30, 70) / 100f).toInt()
                 val h = (dm.heightPixels * Store.i("circle_h", 62).coerceIn(40, 90) / 100f).toInt()
-                val l = dm.widthPixels - w - T.dp(12)
-                val t = (dm.heightPixels - h) / 2
+                val l = dm.widthPixels - w - T.dp(10)
+                val t =
+                    when (Store.s("circle_corner", "top")) {
+                        "bottom" -> dm.heightPixels - h - T.dp(24)
+                        "center" -> (dm.heightPixels - h) / 2
+                        else -> T.dp(36)
+                    }
                 o.setLaunchBounds(Rect(l, t, l + w, t + h))
                 try {
                     ActivityOptions::class.java.getMethod("setLaunchWindowingMode", Int::class.javaPrimitiveType).invoke(o, 5)
@@ -690,9 +726,13 @@ class CircleService : AccessibilityService() {
             if (Store.b("circle_float", true)) ob.putInt("android.activity.windowingMode", 5)
             Slot.grantUntil = System.currentTimeMillis() + 4 * 60000L
             startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), ob)
-            toast("Google Lens  -  $TAG")
+            toast("Google Lens  -  $lensTag")
             checkFloat()
             lensAuto(0)
+            if (retry) {
+                recordHistory(u, source)
+                restoreSource(source, u)
+            }
         } catch (e: Exception) {
             Log.e("circle-lens", e)
             share(u, "Search with")
@@ -745,6 +785,38 @@ class CircleService : AccessibilityService() {
         }
     }
 
+    @Volatile private var lensSource: String = ""
+
+    /** Keeps a small history of circled images (time, app, image) so a search can be repeated later. */
+    private fun recordHistory(u: Uri, source: String) {
+        try {
+            Store.add("circle_hist", org.json.JSONObject().put("t", System.currentTimeMillis()).put("app", source).put("uri", u.toString()))
+            val rows = Store.rows("circle_hist")
+            if (rows.size > 40) rows.take(rows.size - 40).forEach { Store.remove("circle_hist", it.optString("id")) }
+        } catch (e: Exception) {
+            Log.e("circle-hist", e)
+        }
+    }
+
+    /**
+     * If the circled app disappeared when the floating Lens window opened (some devices re-create the task), it is opened again
+     * and Lens is shown on top once more. Tried once.
+     */
+    private fun restoreSource(source: String, u: Uri) {
+        if (source.isBlank() || !Store.b("circle_restore", true)) return
+        ui.postDelayed({
+            try {
+                if (source in visiblePackages()) return@postDelayed
+                val li = packageManager.getLaunchIntentForPackage(source) ?: return@postDelayed
+                startActivity(li.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                toast("Restoring the app you circled")
+                ui.postDelayed({ sendToLens(u, retry = false) }, 1300)
+            } catch (e: Exception) {
+                Log.e("circle-restore", e)
+            }
+        }, 3200)
+    }
+
     private var lensTyped = -1
 
     /** Lens opens by itself: open "Add to your search", type the tag, press search. Polls for about 40 seconds. */
@@ -769,13 +841,13 @@ class CircleService : AccessibilityService() {
                     val ed = findEditor(root, 0)
                     if (ed != null) {
                         val cur = ed.text?.toString() ?: ""
-                        if (!cur.contains(TAG) && lensTyped < 0) {
+                        if (!cur.contains(lensTag) && lensTyped < 0) {
                             ed.performAction(AccessibilityNodeInfo.ACTION_CLICK)
                             ed.performAction(AccessibilityNodeInfo.ACTION_FOCUS)
-                            val args = Bundle().putCharSequenceCompat(TAG)
+                            val args = Bundle().putCharSequenceCompat(lensTag)
                             if (!ed.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)) ed.performAction(AccessibilityNodeInfo.ACTION_PASTE)
                             lensTyped = n
-                        } else if (cur.contains(TAG)) {
+                        } else if (cur.contains(lensTag)) {
                             if (lensTyped < 0) lensTyped = n
                             var sent = false
                             if (android.os.Build.VERSION.SDK_INT >= 30) {

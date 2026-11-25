@@ -1934,9 +1934,19 @@ class SettingsActivity : Activity() {
                 listOf("lens" to "Google Lens (floating, UPSC Prelims 2027 tag, auto search)", "gemini" to "Gemini app (floating, UPSC Prelims 2027 tag)", "ask" to "Ask me every time (Gemini, Lens, share)"),
             ),
             sw("Floating Lens / Gemini window", "Small window on the right so your notes stay visible", "circle_float", true),
+            choice("Floating window position", "circle_corner", "top", listOf("top" to "Right corner, top", "center" to "Right side, middle", "bottom" to "Right corner, bottom")),
             num("Floating window width", "circle_w", 42, 30, 70, "%"),
             num("Floating window height", "circle_h", 62, 40, 90, "%"),
             sw("Search automatically", "Needs the accessibility service; Lens types the tag and searches, Gemini presses Send", "circle_autosend", true),
+            value("Search tag text", null, Store.s("circle_tag_text").ifBlank { CircleService.TAG }) {
+                Dlg.input(c, "Search tag", "Typed into Google Lens with every circle", Store.s("circle_tag_text").ifBlank { CircleService.TAG }) { v ->
+                    Store.put("circle_tag_text", v.trim())
+                    redraw()
+                }
+            },
+            sw("Add subject of the running timer", "UPSC Prelims 2027 Polity while a Polity timer runs", "circle_subject", true),
+            sw("Reopen the circled app if it closes", "Brings the app back and shows Lens again", "circle_restore", true),
+            action("clock", T.plum, "Circle search history", "Last 20 circled images, tap to search again") { CircleService.history(c as android.app.Activity) },
             sw("Add 'UPSC Prelims 2027' tag", "Sent with every circled image so answers are exam focused", "circle_tag", true),
             value("Prompt sent with the image", null, CircleService.geminiPrompt().take(60) + "...") {
                 Dlg.input(c, "Prompt", "Leave empty for the default", Store.s("circle_prompt"), multi = true) { v ->
