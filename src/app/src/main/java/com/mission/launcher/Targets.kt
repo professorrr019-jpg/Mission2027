@@ -203,7 +203,32 @@ object Targets {
         refreshInfo()
         box.addView(topicsInfo, lp(-2, -2, 10))
         box.addView(
-            a.pill("Choose topics (colour coded, with PYQ counts)", "grid") {
+            a.pill("Step 1: Choose subject(s)", "book", false, T.plum) {
+                Pyq.load(a)
+                val subs = Pyq.withPractice
+                val names = subs.map { (if (it.practice) it.name else Syl.short(it.name)) + "  (" + it.micros.size + " topics, " + it.total + " Q)" }.toTypedArray()
+                val on = BooleanArray(subs.size) { i -> topics.any { it.substringBefore('|') == subs[i].name } }
+                Dlg.builder(a).setTitle("Choose subject(s)").setMultiChoiceItems(names, on) { _, i, v -> on[i] = v }
+                    .setPositiveButton("Next: topics") { _, _ ->
+                        val chosen = subs.filterIndexed { i, _ -> on[i] }
+                        if (chosen.isEmpty()) {
+                            a.toast("Pick at least one subject")
+                        } else {
+                            val keys = chosen.flatMap { s -> s.micros.map { it.key } }
+                            if (tf.text.toString().isBlank()) tf.setText(chosen.joinToString(" + ") { Syl.short(it.name) })
+                            val pre = topics.filter { it in keys }
+                            PyqUi.pick(a, "Topics of " + chosen.joinToString(", ") { Syl.short(it.name) }, keys, pre, false, "Add") { sel ->
+                                topics.removeAll { it in keys }
+                                topics.addAll(sel)
+                                refreshInfo()
+                            }
+                        }
+                    }.setNegativeButton("Cancel", null).show()
+            },
+            lp(-2, -2, 8),
+        )
+        box.addView(
+            a.pill("Step 2: Choose topics (colour coded, with PYQ counts)", "grid") {
                 PyqUi.pick(a, "Choose topics for this target", null, topics, false, "Add") { sel ->
                     topics.clear()
                     topics.addAll(sel)

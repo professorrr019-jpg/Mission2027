@@ -850,6 +850,7 @@ class CircleService : AccessibilityService() {
         }
         if (n > 65 || !Store.b("circle_autosend", true)) {
             detail(false)
+            if (n > 65 && lensTyped < 0) toast("Tag copied: tap the Lens search box and paste \"$lensTag\"")
             return
         }
         ui.postDelayed({
