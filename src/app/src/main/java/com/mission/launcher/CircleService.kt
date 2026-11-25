@@ -731,6 +731,7 @@ class CircleService : AccessibilityService() {
             lensAuto(0)
             if (retry) {
                 recordHistory(u, source)
+                verifyLens(source, u)
                 restoreSource(source, u)
             }
         } catch (e: Exception) {
@@ -802,6 +803,26 @@ class CircleService : AccessibilityService() {
      * If the circled app disappeared when the floating Lens window opened (some devices re-create the task), it is opened again
      * and Lens is shown on top once more. Tried once.
      */
+    /**
+     * Self-healing check 3 s after Lens was launched: if floating mode left the screen without Lens (or the circled app) the floating
+     * window style is switched off for good and Lens is opened once more full screen, so the circled app is never forced into a broken
+     * freeform window again.
+     */
+    private fun verifyLens(source: String, u: Uri) {
+        ui.postDelayed({
+            try {
+                if (!Store.b("circle_float", true)) return@postDelayed
+                val vis = visiblePackages()
+                if (vis.isEmpty() || vis.any { it in LENS_PACKAGES } || (source.isNotBlank() && source in vis)) return@postDelayed
+                Store.put("circle_float", false)
+                toast("Floating window failed here, using full screen Lens")
+                sendToLens(u, false)
+            } catch (e: Exception) {
+                Log.e("circle-verify", e)
+            }
+        }, 3000)
+    }
+
     private fun restoreSource(source: String, u: Uri) {
         if (source.isBlank() || !Store.b("circle_restore", false)) return
         ui.postDelayed({

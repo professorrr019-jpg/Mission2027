@@ -96,7 +96,7 @@ object PyqUi {
             filters.addView(a.chipRow(*tiers.toTypedArray()))
             val subs =
                 Pyq.withPractice.filter { s -> allow == null || s.micros.any { it.key in allow } }.map { s ->
-                    chip(a, if (s.practice) "PYQ Practice" else Syl.short(s.name), s.color, s.idx in subjF).apply { tap(false) { if (!subjF.add(s.idx)) subjF.remove(s.idx); render() } }
+                    chip(a, if (s.practice) (if (s.name == Pyq.MOCKS) "Zite MCQ" else "PYQ Practice") else Syl.short(s.name), s.color, s.idx in subjF).apply { tap(false) { if (!subjF.add(s.idx)) subjF.remove(s.idx); render() } }
                 } + chip(a, if (byWeight) "Most asked first" else "Syllabus order", T.gold, byWeight).apply { tap(false) { byWeight = !byWeight; render() } } + chip(a, if (pendOnly) "Pending only" else "Show done too", T.text2, pendOnly).apply { tap(false) { pendOnly = !pendOnly; render() } }
             filters.addView(a.chipRow(*subs.toTypedArray()), lp(-1, -2, 6))
         }
@@ -110,7 +110,8 @@ object PyqUi {
             r.addView(View(a).apply { background = T.round(col, 3) }, lpm(T.dp(5), -1, 0, 0, 8, 0))
             if (!browse) r.addView(tick(a, on, col), lpm(T.dp(24), T.dp(24), 0, 10, 8, 0))
             val mid = a.vbox()
-            val nm = (if (m.key in done) "[done] " else "") + m.name
+            val pos = Pyq.withPractice.firstOrNull { it.name == m.subject }?.micros?.indexOf(m)?.plus(1) ?: 0
+            val nm = (if (m.key in done) "[done] " else "") + (if (pos > 0 && !byWeight) "%02d  ".format(pos) else "") + m.name
             mid.addView(a.text(nm, 13f, 2, T.text), lp(-1, -2, 8))
             val meta = a.hbox()
             meta.addView(tierChip(a, m))

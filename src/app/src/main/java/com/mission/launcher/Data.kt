@@ -522,7 +522,7 @@ object Zite {
 object Syl {
     enum class St { NEW, LEARNING, DONE }
 
-    fun doneSet(): MutableSet<String> = Store.stringList("syl_done").toMutableSet()
+    fun doneSet(): MutableSet<String> = (Store.stringList("syl_done") + Pyq.mockDoneKeys()).toMutableSet()
 
     fun toggle(key: String) {
         val s = doneSet()

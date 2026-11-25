@@ -42,7 +42,49 @@ object Pyq {
         private set
 
     /** Syllabus subjects plus the PYQ Practice subject, for topic pickers. */
-    val withPractice: List<S> get() = subjects + listOfNotNull(practice)
+    val withPractice: List<S> get() {
+        ensureMocks()
+        return subjects + listOfNotNull(practice, mocks)
+    }
+
+    const val MOCKS = "Zite MCQ and Mocks"
+
+    /** Virtual subject built from the Zite database: every mock / Current Affairs MCQ test, its question count is the target count. */
+    @Volatile var mocks: S? = null
+        private set
+    @Volatile private var mockTried = false
+    private val mockDone = HashSet<String>()
+
+    /** Topic keys of Zite tests that already have a saved attempt: counted as complete in targets. */
+    fun mockDoneKeys(): Set<String> {
+        ensureMocks()
+        return mockDone
+    }
+
+    private fun ensureMocks() {
+        if (mockTried || !ready) return
+        synchronized(this) {
+            if (mockTried) return
+            mockTried = true
+            try {
+                val z = Zite.data(Store.app)
+                val idx = subjects.size + 1
+                val ms = ArrayList<M>()
+                // Current Affairs tests first, then subject tests, sectionals and full lengths, in schedule order.
+                val order = z.mocks.sortedWith(compareBy<Mock>({ if (it.section.contains("Current", true) || it.section.contains("CA") ) 0 else 1 }, { it.date?.toEpochDay() ?: 0L }, { it.title }))
+                order.forEach { mk ->
+                    val q = (1..mk.q.coerceAtLeast(1)).map { Q(2026, it, "", "", "", "") }
+                    val m = M(MOCKS, idx, mk.title + "  (" + mk.q + " MCQ)", emptyList(), q)
+                    ms.add(m)
+                    byKey[m.key] = m
+                    if (z.attempts.any { it.title == mk.title }) mockDone.add(m.key)
+                }
+                if (ms.isNotEmpty()) mocks = S(MOCKS, idx, ms, true)
+            } catch (e: Exception) {
+                Log.e("pyq-mocks", e)
+            }
+        }
+    }
 
     private val byKey = HashMap<String, M>()
 
@@ -99,7 +141,7 @@ object Pyq {
 
     fun micro(key: String): M? = byKey[key]
 
-    fun subject(name: String): S? = if (name == PRACTICE) practice else (subjects.firstOrNull { it.name == name } ?: subjects.firstOrNull { sameSubject(it.name, name) })
+    fun subject(name: String): S? = if (name == PRACTICE) practice else if (name == MOCKS) mocks else (subjects.firstOrNull { it.name == name } ?: subjects.firstOrNull { sameSubject(it.name, name) })
 
     fun colorOf(subjectName: String): Int = subject(subjectName)?.color ?: T.accent
 
