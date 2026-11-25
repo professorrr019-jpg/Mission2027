@@ -171,10 +171,12 @@ fun Context.pill(
     f: () -> Unit,
 ): LinearLayout =
     hbox().apply {
-        background = T.round(if (filled) color else T.inset, 14)
+        // Apple Music style: the main action is a solid black (white in dark mode) pill, the rest are soft grey pills.
+        val fill = if (filled && color == T.accent) (if (T.dark) 0xFFF6F2E6.toInt() else 0xFF161513.toInt()) else color
+        background = T.round(if (filled) fill else T.inset, 60)
         padDp(8, 5, 10, 5)
         gravity = Gravity.CENTER
-        val foreground = if (filled) T.contentColor(color) else T.text
+        val foreground = if (filled) T.contentColor(fill) else T.text
         if (icon != null) {
             addView(IconView(context, icon, if (filled) foreground else T.text2, 15, 2f))
             addView(hspace(6))
@@ -191,7 +193,7 @@ fun Context.iconBtn(
     f: () -> Unit,
 ): FrameLayout =
     FrameLayout(this).apply {
-        background = T.round(T.inset, 12)
+        background = T.round(T.inset, 60)
         addView(IconView(context, icon, T.textAccent(col), 18, 1.9f), FrameLayout.LayoutParams(T.dp(18), T.dp(18), Gravity.CENTER))
         minimumWidth = T.dp(size)
         minimumHeight = T.dp(size)
