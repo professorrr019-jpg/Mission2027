@@ -56,6 +56,7 @@ object PyqUi {
         var tierF = 0
         val subjF = LinkedHashSet<Int>()
         var pendOnly = false
+        var byWeight = false
         var query = ""
         val root = a.vbox()
         root.padDp(14, 6, 14, 4)
@@ -76,7 +77,7 @@ object PyqUi {
         var dlg: android.app.AlertDialog? = null
 
         fun visible(): List<Pyq.M> =
-            Pyq.withPractice.filter { subjF.isEmpty() || it.idx in subjF }.flatMap { it.micros }.filter { m ->
+            Pyq.withPractice.filter { subjF.isEmpty() || it.idx in subjF }.flatMap { it.micros }.let { l -> if (byWeight) l.sortedByDescending { it.recent5 * 100 + it.total } else l }.filter { m ->
                 (allow == null || m.key in allow) &&
                     (tierF == 0 || m.tier == tierF) &&
                     (!pendOnly || m.key !in done) &&
@@ -96,7 +97,7 @@ object PyqUi {
             val subs =
                 Pyq.withPractice.filter { s -> allow == null || s.micros.any { it.key in allow } }.map { s ->
                     chip(a, if (s.practice) "PYQ Practice" else Syl.short(s.name), s.color, s.idx in subjF).apply { tap(false) { if (!subjF.add(s.idx)) subjF.remove(s.idx); render() } }
-                } + chip(a, if (pendOnly) "Pending only" else "Show done too", T.text2, pendOnly).apply { tap(false) { pendOnly = !pendOnly; render() } }
+                } + chip(a, if (byWeight) "Most asked first" else "Syllabus order", T.gold, byWeight).apply { tap(false) { byWeight = !byWeight; render() } } + chip(a, if (pendOnly) "Pending only" else "Show done too", T.text2, pendOnly).apply { tap(false) { pendOnly = !pendOnly; render() } }
             filters.addView(a.chipRow(*subs.toTypedArray()), lp(-1, -2, 6))
         }
 

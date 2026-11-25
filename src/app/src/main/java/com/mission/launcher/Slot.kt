@@ -77,6 +77,22 @@ object Slot {
             0
         }
 
+    /** Days in a row (up to today) with study time in this target's subjects. Today without study yet does not break it. */
+    fun streak(t: Targets.JSONObject2): Int =
+        try {
+            val subs = t.topics.map { it.substringBefore('|').lowercase() }.toSet()
+            val days = (0 until 60).map { Targets.today().minusDays(it.toLong()) }
+            val rows = Repo.byDaySubject(days)
+            var n = 0
+            for ((i, m) in rows.withIndex()) {
+                val got = m.filter { it.key.lowercase() in subs }.values.sum() > 0
+                if (got) n++ else if (i > 0) break
+            }
+            n
+        } catch (e: Exception) {
+            0
+        }
+
     // ---------------- reminder card ----------------
     fun tag(t: Targets.JSONObject2) = "target_" + t.id
 
@@ -209,6 +225,21 @@ object Slot {
             val today = studiedToday(t)
             box.addView(c.text("Time to study  -  ${fmtMins(t.mins)} slot, ${Targets.daysLeft(t)} days left", 11.5f, 0, T.text2), lp(-2, -2, 4))
             box.addView(c.text("Today $today of ${t.mins} min  -  $done/$total topics done", 11f, 0, T.text3), lp(-2, -2, 2))
+            val frac = if (t.mins > 0) (today.toFloat() / t.mins).coerceIn(0f, 1f) else 0f
+            val bar = LinearLayout(c)
+            bar.addView(View(c).apply { background = T.round(t.color, 3) }, LinearLayout.LayoutParams(0, T.dp(5), frac.coerceAtLeast(0.001f)))
+            bar.addView(View(c).apply { background = T.round(T.withAlpha(t.color, 0.2f), 3) }, LinearLayout.LayoutParams(0, T.dp(5), (1f - frac).coerceAtLeast(0.001f)))
+            box.addView(bar, lp(-1, -2, 5))
+            val facts = c.hbox()
+            val st = streak(t)
+            if (st > 0) facts.addView(PyqUi.chip(c, "$st day streak", T.amber, true))
+            val bk = pend.count { it in Review.backlogKeys() }
+            if (bk > 0) facts.addView(PyqUi.chip(c, "$bk backlog first", T.danger), lpm(-2, -2, if (st > 0) 6 else 0, 0, 0, 0))
+            if (facts.childCount > 0) box.addView(facts, lp(-2, -2, 5))
+            pend.firstOrNull()?.let { k ->
+                val m = Pyq.micro(k)
+                box.addView(c.text("Best next: " + Targets.topicName(k) + (m?.let { "  (" + it.recent5 + " Q in 5y)" } ?: ""), 11f, 2, Pyq.colorOf(k.substringBefore('|')).let { T.textAccent(it) }, 2), lp(-1, -2, 5))
+            }
             val subs = pend.groupBy { it.substringBefore('|') }
             if (subs.isEmpty()) {
                 box.addView(c.pill("Start timer", "timer", true, t.color) { begin(c, t, t.firstSubject, null) }, lp(-2, -2, 8))
@@ -226,7 +257,9 @@ object Slot {
             if (subs.size > 1) {
                 box.addView(c.text("Tip: open a subject and tick several topics to run one timer for all of them.", 10.5f, 0, T.text3), lp(-2, -2, 6))
             }
-            box.addView(c.pill("Later (5 min)", null, false) { later(c, t) }, lp(-2, -2, 8))
+            if (subs.size > 1) box.addView(c.pill("Start all pending topics", "timer", false, t.color) { beginMulti(c, t, pend.take(12)) }, lp(-1, -2, 6))
+            // While strict focus is on, the card stays until the timer starts: there is no Later.
+            if (!Store.b("strict_slot", true)) box.addView(c.pill("Later (5 min)", null, false) { later(c, t) }, lp(-2, -2, 8))
         }
 
         fun topicsView(s: String, ks: List<String>) {
