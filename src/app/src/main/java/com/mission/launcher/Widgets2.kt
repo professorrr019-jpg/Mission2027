@@ -232,7 +232,8 @@ object Cards2 {
             val subs = pend.groupBy { it.substringBefore('|') }
             if (subs.isNotEmpty()) {
                 val q15 = pend.sumOf { Slot.pyq(c, it) }
-                row.addView(c.text("${pend.size} topics left  -  $q15 PYQs in last 15 years", 11f, 2, T.textAccent(t.color)), lp(-2, -2, 4))
+                val bl = Review.backlogKeys().count { it in pend }
+                row.addView(c.text("${pend.size} topics left  -  $q15 PYQs in last 15 years" + (if (bl > 0) "  -  $bl backlog first" else ""), 11f, 2, T.textAccent(t.color)), lp(-2, -2, 4))
                 // next topics, colour coded by subject, tier badge and PYQ count
                 pend.take(4).forEach { k ->
                     val m = Pyq.micro(k)

@@ -125,6 +125,9 @@ object TimerState {
         val totalMs = Store.l("timer_session_ms") + if (phase() == "work") phaseMs() else 0L
         val shouldSave = save && totalMs >= 30_000L
         val minutes = ((totalMs + 30_000L) / 60_000L).toInt()
+        val subj0 = subject()
+        val topic0 = topic()
+        val start0 = Store.l("timer_session_start")
         if (shouldSave) {
             Store.add(
                 "sessions",
@@ -157,6 +160,7 @@ object TimerState {
         Store.put("timer_auto_paused", false)
         Store.put("timer_idle_paused", false)
         Store.put("timer_topic", "")
+        if (shouldSave && Store.b("review_after_session", true)) Review.queueSession(subj0, topic0, minutes, start0)
         return TimerFinishResult(true, shouldSave, if (shouldSave) minutes else 0)
     }
 }
@@ -208,6 +212,8 @@ class TimerService : Service() {
     private var dot: View? = null
     private var panel: LinearLayout? = null
     private var lp: WindowManager.LayoutParams? = null
+    private var labelV: TextView? = null
+    private var labelBase = ""
     private var expanded = false
     private var lastUsageCheck = 0L
     private var distractedSince = 0L
@@ -276,6 +282,11 @@ class TimerService : Service() {
                     Store.put("timer_x", T.dp(24))
                     Store.put("timer_y", T.dp(120))
                     expanded = false
+                    lp?.let { l ->
+                        l.x = T.dp(24)
+                        l.y = T.dp(120)
+                        try { Overlay.update(applicationContext, "timer", l) } catch (e: Exception) { Log.e("timer-bring", e) }
+                    }
                 }
                 ACT_STOP -> {
                     android.widget.Toast.makeText(this, TimerState.finish(true).message, android.widget.Toast.LENGTH_LONG).show()
@@ -388,6 +399,13 @@ class TimerService : Service() {
         if (TimerState.mode() == "pomo" && TimerState.running() && ms <= 0) phaseDone()
         val (ms2, cd2) = shownMs()
         timeV?.text = fmt(ms2, cd2)
+        // show what is on screen right now (Flexcil, PDF, Telegram...) so the timer knows what is being studied
+        labelV?.let { lv ->
+            val fg = Slot.fgPkg
+            val nm = if (fg.isBlank() || fg == packageName) "" else (Apps.byPkg(fg)?.label ?: "")
+            val want = if (nm.isBlank()) labelBase else "$labelBase  |  $nm"
+            if (lv.text.toString() != want) lv.text = want
+        }
         dot?.background =
             T.round(
                 if (!TimerState.running()) {
@@ -513,7 +531,7 @@ class TimerService : Service() {
         val tv = c.text("00:00", 15f, 3, 0xFFF3F0EB.toInt()).tabular()
         timeV = tv
         top.addView(tv, lpm(-2, -2, 8, 0, 0, 0))
-        top.addView(
+        val label =
             c.text(
                 TimerState.subject() +
                     TimerState.topic().takeIf {
@@ -523,9 +541,12 @@ class TimerService : Service() {
                 1,
                 0xFFB9B3AA.toInt(),
                 1,
-            ),
-            lpm(-2, -2, 8, 0, 0, 0),
-        )
+            )
+        labelV = label
+        labelBase = label.text.toString()
+        label.maxWidth = T.dp(240)
+        label.ellipsize = android.text.TextUtils.TruncateAt.END
+        top.addView(label, lpm(-2, -2, 8, 0, 0, 0))
         root.addView(top)
         val pn =
             LinearLayout(c).apply {
@@ -576,6 +597,25 @@ class TimerService : Service() {
         )
         panel = pn
         root.addView(pn)
+        lateinit var paramsRef: android.view.WindowManager.LayoutParams
+        // After 5 seconds the timer shrinks to a small time-only chip so it never covers the notes; a tap brings the details back.
+        fun setCompact(on: Boolean) {
+            if (pill == null) return
+            label.visibility = if (on) View.GONE else View.VISIBLE
+            if (on) {
+                pn.visibility = View.GONE
+                expanded = false
+            }
+            tv.textSize = if (on) 12f else 15f
+            root.padDp(if (on) 9 else 12, if (on) 4 else 8, if (on) 9 else 12, if (on) 4 else 8)
+            root.alpha = if (on) 0.82f else 1f
+            try { Overlay.update(c, "timer", paramsRef) } catch (e: Exception) { Log.e("timer-compact", e) }
+        }
+        val compactR = Runnable { setCompact(true) }
+        fun awake(ms: Long = 5000L) {
+            h.removeCallbacks(compactR)
+            h.postDelayed(compactR, ms)
+        }
         val params =
             Overlay.params().apply {
                 val dm = resources.displayMetrics
@@ -583,6 +623,7 @@ class TimerService : Service() {
                 y = Store.i("timer_y", T.dp(120)).coerceIn(0, (dm.heightPixels - T.dp(60)).coerceAtLeast(0))
             }
         lp = params
+        paramsRef = params
         pill = root
         var sx = 0f
         var sy = 0f
@@ -592,6 +633,7 @@ class TimerService : Service() {
         root.setOnTouchListener { _, e ->
             when (e.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
+                    awake(if (expanded) 9000L else 5000L)
                     sx = e.rawX
                     sy = e.rawY
                     ox = params.x
@@ -613,16 +655,21 @@ class TimerService : Service() {
                     if (moved) {
                         Store.put("timer_x", params.x)
                         Store.put("timer_y", params.y)
+                    } else if (label.visibility == View.GONE) {
+                        setCompact(false)
+                        awake(5000L)
                     } else {
                         expanded = !expanded
                         pn.visibility = if (expanded) View.VISIBLE else View.GONE
                         Overlay.update(c, "timer", params)
+                        awake(if (expanded) 9000L else 5000L)
                     }
                 }
             }
             true
         }
         Overlay.show(c, "timer", root, params)
+        awake(5000L)
     }
 
     private fun shutdown() {

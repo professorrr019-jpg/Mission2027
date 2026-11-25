@@ -256,6 +256,7 @@ class CircleService : AccessibilityService() {
     override fun onAccessibilityEvent(e: AccessibilityEvent?) {
         if (e?.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
             val pkg = e.packageName?.toString() ?: return
+            if (pkg != "com.android.systemui" && pkg != packageName && !pkg.contains("inputmethod")) Slot.fgPkg = pkg
             Slot.guard(this, pkg)
         }
     }

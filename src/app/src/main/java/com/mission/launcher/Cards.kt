@@ -1753,6 +1753,13 @@ object Cards {
             tile("timer", "Show timer", T.teal) { TimerState.bringBack(c) },
         ).forEach { r3b.addView(it, lpm(0, -2, 0, 0, 8, 0, 1f)) }
         card.addView(r3b, lp(-1, -2, 8))
+        val r3c = c.hbox(false)
+        listOf(
+            tile("note", "Review log", T.plum) { Review.log(h.act) },
+            tile("checkc", "Review now", T.sage) { Review.launch(c, "daily", java.time.LocalDate.now()) },
+            tile("split", "Split view", T.teal) { Split.pick(h.act) },
+        ).forEach { r3c.addView(it, lpm(0, -2, 0, 0, 8, 0, 1f)) }
+        card.addView(r3c, lp(-1, -2, 8))
         val r4 = c.hbox(false)
         val small = Store.b("compact_cards", true)
         val smallText = Store.f("text_scale", 1f) < 0.95f

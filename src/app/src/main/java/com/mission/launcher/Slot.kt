@@ -36,9 +36,13 @@ object Slot {
     }
 
     /** Pending topic keys of a target, most asked in PYQs first. */
+    /** Foreground app seen by the accessibility service (for the timer label). */
+    @Volatile var fgPkg: String = ""
+
     fun pending(c: Context, t: Targets.JSONObject2): List<String> {
         val done = Syl.doneSet()
-        return t.topics.filter { it !in done }.sortedByDescending { pyq(c, it) }
+        val back = Review.backlogKeys()
+        return t.topics.filter { it !in done }.sortedWith(compareByDescending<String> { it in back }.thenByDescending { pyq(c, it) })
     }
 
     /** Questions asked on this topic in the PYQ data (15 years of Prelims). */

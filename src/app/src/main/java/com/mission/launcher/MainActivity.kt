@@ -401,6 +401,7 @@ class MainActivity : Activity(), Host {
         if (online()) Thread { try { Updater.backgroundCheck(applicationContext, 10) } catch (e: Exception) { Log.e("update-resume", e) } }.start()
         if (Store.b("pin_home") && Pin.isSet() && !Pin.unlocked()) gate { }
         scheduleRefresh(150)
+        try { if (!editing && gateView == null) Review.promptIfDue(this) } catch (e: Exception) { Log.e("review", e) }
     }
 
     /** Notifications and floating cards deep-link into the toolkit and automation screens. */
@@ -477,6 +478,27 @@ class MainActivity : Activity(), Host {
         dock.requestLayout()
     }
 
+    /** Split screen, floating window or rotation: the window size changed, so cards, dock and drawer are laid out again for the new width. */
+    override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
+        super.onConfigurationChanged(newConfig)
+        try {
+            val reopen = drawer != null
+            if (reopen) closeDrawer()
+            closeRightPanel()
+            T.init(applicationContext)
+            scheduleRefresh(250)
+            updateEdgeHandle()
+            if (reopen) ui.postDelayed({ if (drawer == null) openDrawer() }, 450)
+        } catch (e: Exception) {
+            Log.e("config-change", e)
+        }
+    }
+
+    override fun onMultiWindowModeChanged(isInMultiWindowMode: Boolean, newConfig: android.content.res.Configuration) {
+        super.onMultiWindowModeChanged(isInMultiWindowMode, newConfig)
+        scheduleRefresh(250)
+    }
+
     private fun scheduleRefresh(delay: Long = 300) {
         ui.removeCallbacks(refreshRun)
         ui.postDelayed(refreshRun, delay)
@@ -508,7 +530,7 @@ class MainActivity : Activity(), Host {
             }
         attachGestures(sv)
         val col = vbox()
-        val wide = resources.displayMetrics.widthPixels / resources.displayMetrics.density > 700
+        val wide = resources.configuration.screenWidthDp > 700
         col.setPadding(T.dp(if (wide) 24 else 14), T.dp(8), T.dp(if (wide) 24 else 14), T.dp(maxOf(60, Store.i("dock_icon", 15).coerceIn(10, 72) + 18 + 14 + 24)) + botInset)
         val ids = if (Store.b("safe_mode", false)) emptyList() else HomeLayout.cards(p)
         if (editing) {
@@ -527,7 +549,7 @@ class MainActivity : Activity(), Host {
             val rest = ids.filter { it !in full }
             full.filter { it == "header" }.forEach { addCard(col, i, it, ids) }
             full.filter { it != "header" }.forEach { addCard(col, i, it, ids) }
-            val widthDp = resources.displayMetrics.widthPixels / resources.displayMetrics.density
+            val widthDp = resources.configuration.screenWidthDp.toFloat()
             val n = if (widthDp > 1100 && Store.b("compact_cards", true)) 3 else 2
             val colsV = (0 until n).map { vbox() }
             rest.forEachIndexed { k, id -> addCard(colsV[k % n], i, id, ids) }
@@ -1327,7 +1349,7 @@ class MainActivity : Activity(), Host {
             repeat(3 - rowTiles.size) { r.addView(View(this), lpm(0, 1, 3, 0, 3, 0, 1f)) }
             panel.addView(r, lp(-1, -2, 8))
         }
-        val width = minOf(T.dp(380), (resources.displayMetrics.widthPixels * 0.9f).toInt())
+        val width = minOf(T.dp(380), ((if (root.width > 0) root.width else resources.displayMetrics.widthPixels) * 0.9f).toInt())
         overlay.addView(
             panel,
             FrameLayout.LayoutParams(width, -2, Gravity.END or Gravity.CENTER_VERTICAL).apply {
@@ -1379,7 +1401,7 @@ class MainActivity : Activity(), Host {
         d.setPadding(0, topInset, 0, botInset)
         drawer = d
         root.addView(d, FrameLayout.LayoutParams(-1, -1))
-        d.translationY = resources.displayMetrics.heightPixels.toFloat()
+        d.translationY = (if (root.height > 0) root.height else resources.displayMetrics.heightPixels).toFloat()
         d.animate().translationY(0f).setDuration(240).start()
         var y0 = 0f
     }

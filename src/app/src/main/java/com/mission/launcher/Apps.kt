@@ -448,7 +448,7 @@ class DrawerView(val a: Activity, val onClose: () -> Unit) : FrameLayout(a) {
                         it
                     } else {
                         // automatic: as many columns as fit icon + label comfortably
-                        val widthDp = a.resources.displayMetrics.widthPixels / a.resources.displayMetrics.density - 52
+                        val widthDp = a.resources.configuration.screenWidthDp - 52f
                         (widthDp / (Store.i("drawer_icon", 30) + 34)).toInt().coerceIn(4, 14)
                     }
                 }

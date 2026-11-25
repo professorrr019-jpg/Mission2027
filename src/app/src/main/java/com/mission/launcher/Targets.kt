@@ -100,6 +100,7 @@ object Targets {
     fun schedule(c: Context) {
         val at = nextFire()
         if (at == null) Sched.cancelTarget(c) else Sched.target(c, at)
+        Review.arm(c)
     }
 
     /** Called by [TargetReceiver] at the reminder time. Shows a colour-coded notification and a small floating card. */
@@ -343,7 +344,11 @@ class TargetReceiver : BroadcastReceiver() {
         val pr = goAsync()
         Thread {
             try {
-                if (i.action == "target.later") Slot.reshow(c, i.getStringExtra("tid")) else Targets.fire(c)
+                when (i.action) {
+                    "target.later" -> Slot.reshow(c, i.getStringExtra("tid"))
+                    "review.daily" -> { Review.midnight(c); Review.arm(c) }
+                    else -> Targets.fire(c)
+                }
             } catch (e: Exception) {
                 Log.e("target-receiver", e)
             } finally {
