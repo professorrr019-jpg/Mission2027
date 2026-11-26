@@ -717,13 +717,11 @@ class CircleService : AccessibilityService() {
                         "center" -> (dm.heightPixels - h) / 2
                         else -> T.dp(36)
                     }
+                // Bounds only: a freeform window is used when the device allows it, otherwise Lens opens normally on top.
+                // The hidden windowing-mode hack is gone: it threw NoSuchMethodException and could push the circled app out of the screen.
                 o.setLaunchBounds(Rect(l, t, l + w, t + h))
-                try {
-                    ActivityOptions::class.java.getMethod("setLaunchWindowingMode", Int::class.javaPrimitiveType).invoke(o, 5)
-                } catch (e: Throwable) { Log.e("circleservice", e) }
             }
             val ob = o.toBundle() ?: Bundle()
-            if (Store.b("circle_float", true)) ob.putInt("android.activity.windowingMode", 5)
             Slot.grantUntil = System.currentTimeMillis() + 4 * 60000L
             startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), ob)
             toast("Google Lens  -  $lensTag")
