@@ -17,6 +17,25 @@ object Migrate {
                 check(p.edit().remove("gkey").commit()) { "Legacy credential could not be removed" }
             }
         }
+        if (!Store.b("pro_cards_v1")) {
+            try {
+                val pages = HomeLayout.load()
+                if (pages.length() > 0) {
+                    fun add(i: Int, id: String) {
+                        val pg = pages.getJSONObject(minOf(i, pages.length() - 1))
+                        val cs = HomeLayout.cards(pg)
+                        if (id !in cs) HomeLayout.setCards(pg, listOf(id) + cs)
+                    }
+                    add(0, "score")
+                    add(1, "pace")
+                    add(2, "thinkers")
+                    HomeLayout.save(pages)
+                }
+                Store.put("pro_cards_v1", true)
+            } catch (e: Exception) {
+                Log.e("migrate-pro", e)
+            }
+        }
         if (!Store.b("size_v2")) {
             if (Store.i("dock_icon", 30) == 30) Store.put("dock_icon", 15)
             Store.put("size_v2", true)

@@ -63,7 +63,7 @@ object Cards {
 
     val catalog =
         linkedMapOf(
-            "header" to Meta("Clock and shortcuts", "clock", true, 110), "countdown" to Meta("Exam countdown", "target", true, 230),
+            "header" to Meta("Clock and shortcuts", "clock", true, 110), "score" to Meta("Today's score (100)", "bolt", false, 330), "pace" to Meta("Prelims pace", "target", false, 260), "thinkers" to Meta("Philosophy thinkers", "book", false, 260), "countdown" to Meta("Exam countdown", "target", true, 230),
             "upcoming" to Meta("Upcoming (study)", "calendar", false, 240), "plan" to Meta("Today's plan", "checkc", false, 260),
             "water" to Meta("Water", "drop", false, 300), "weekly" to Meta("Weekly schedule", "layers", false, 260),
             "important" to Meta("Important", "bell", false, 150), "revision" to Meta("Revise today", "refresh", false, 160),
@@ -101,6 +101,9 @@ object Cards {
             val c = h.act
             val id = canon(id0)
             when (id) {
+                "score" -> DayScore.card(h)
+                "pace" -> PaceCard.card(h)
+                "thinkers" -> Thinkers.card(h)
                 "targets" -> Cards2.targets(h)
                 "pyqmap" -> Cards2.pyqMap(h)
                 "heat" -> Cards2.heat(h)

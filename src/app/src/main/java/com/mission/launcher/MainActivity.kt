@@ -321,6 +321,8 @@ class MainActivity : Activity(), Host {
                 // New day: daily trackers (water, habits, reviews, emergency passes) restart; redraw everything.
                 try {
                     Review.midnight(c)
+                Carry.run(c)
+                LockInfo.update(c)
                 } catch (e: Exception) { Log.e("midnight", e) }
                 Store.changed()
                 scheduleRefresh(100)
@@ -411,6 +413,8 @@ class MainActivity : Activity(), Host {
         }
         if (Focus.active()) Focus.finishIfDue(this)
         Updater.showJustUpdated(this)
+        Carry.run(this)
+        LockInfo.update(this)
         if (online()) Thread { try { Updater.backgroundCheck(applicationContext, 10) } catch (e: Exception) { Log.e("update-resume", e) } }.start()
         if (Store.b("pin_home") && Pin.isSet() && !Pin.unlocked()) gate { }
         scheduleRefresh(150)

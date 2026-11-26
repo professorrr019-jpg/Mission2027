@@ -859,6 +859,7 @@ class SettingsActivity : Activity() {
         group(
             num("Pomodoro focus", "pomo_work", 25, 5, 120, "min"),
             num("Pomodoro break", "pomo_break", 5, 1, 60, "min"),
+            sw("Today on the lock screen", "Silent notification: days left, score, target and timer", "lock_info", true) { LockInfo.update(c) },
             sw("Hour milestones", "Notification at every full hour of a running timer", "timer_milestones", true),
             sw("Alert when the daily goal is reached", "One notification a day", "timer_goal_alert", true),
             sw("Auto-pause on distraction apps", "Pauses on YouTube, music, reels and your distraction list. Needs Usage access", "timer_auto_pause", true) {
