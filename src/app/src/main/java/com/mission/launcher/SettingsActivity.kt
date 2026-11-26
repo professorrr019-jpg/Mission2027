@@ -861,7 +861,6 @@ class SettingsActivity : Activity() {
             num("Pomodoro break", "pomo_break", 5, 1, 60, "min"),
             num("Break reminder every", "timer_break_every", 50, 0, 120, "min", "Stopwatch timer: notification to rest eyes and stand up. 0 = off"),
             sw("Hour milestones", "Notification at every full hour of a running timer", "timer_milestones", true),
-            num("Daily study goal", "study_goal_min", 240, 0, 720, "min", "0 = off"),
             sw("Alert when the daily goal is reached", "One notification a day", "timer_goal_alert", true),
             sw("Auto-pause on distraction apps", "Pauses on YouTube, music, reels and your distraction list. Needs Usage access", "timer_auto_pause", true) {
                 if (it && !Usage.granted(c)) {

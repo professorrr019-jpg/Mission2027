@@ -451,7 +451,7 @@ class TimerService : Service() {
         if (every > 0 && min > 0 && min % every == 0) nudge(5010, "$min min studied: take a break", "Look 20 feet away for 20 seconds, sip water, stand up for 5 minutes.")
         if (Store.b("timer_milestones", true) && min > 0 && min % 60 == 0) nudge(5011, (min / 60).toString() + " hour(s) of " + TimerState.subject(), "Keep the flow. Note the topic you just finished.")
         if (Store.b("timer_goal_alert", true)) {
-            val goal = Store.i("study_goal_min", 240)
+            val goal = Store.i("study_goal_min", 360)
             val today = try { Repo.byDaySubject(listOf(Targets.today())).firstOrNull()?.values?.sum() ?: 0 } catch (e: Exception) { 0 }
             if (goal > 0 && today + min >= goal && Store.s("goal_alert_day") != Store.today()) {
                 Store.put("goal_alert_day", Store.today())
