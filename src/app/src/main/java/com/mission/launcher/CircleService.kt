@@ -506,13 +506,8 @@ class CircleService : AccessibilityService() {
             val o = ActivityOptions.makeBasic()
             if (Store.b("circle_float", true)) {
                 o.setLaunchBounds(bounds)
-                try {
-                    // 5 = freeform windowing mode; forces a floating window where the system allows it.
-                    ActivityOptions::class.java.getMethod("setLaunchWindowingMode", Int::class.javaPrimitiveType).invoke(o, 5)
-                } catch (e: Throwable) { Log.e("circleservice", e) }
             }
             val ob = o.toBundle() ?: Bundle()
-            if (Store.b("circle_float", true)) ob.putInt("android.activity.windowingMode", 5)
             Slot.grantUntil = System.currentTimeMillis() + 4 * 60000L
             if (Store.b("circle_float", true)) {
                 // Step 1: open Gemini itself in the small floating window. Step 2: send the image into that same task,
@@ -547,7 +542,7 @@ class CircleService : AccessibilityService() {
     /** Best effort: once Gemini is in front, press its send button so the search starts without another tap. */
     /** If Gemini still opened (almost) full screen, tell the user once how to allow freeform windows. */
     private fun checkFloat() {
-        if (!Store.b("circle_float", true) || Store.b("circle_float_hint", false)) return
+        if (circleStyle() != "float" || Store.b("circle_float_hint", false)) return
         ui.postDelayed({
             try {
                 val dm = resources.displayMetrics
@@ -690,6 +685,13 @@ class CircleService : AccessibilityService() {
     }
 
     /** Circled image into Google Lens, in a small floating window, with the "UPSC Prelims 2027" tag typed and searched by itself. */
+    /** "split" (side by side, default), "float" (small window, needs freeform support) or "full". */
+    private fun circleStyle(): String {
+        val v = Store.s("circle_style")
+        if (v.isNotBlank()) return v
+        return "split"
+    }
+
     fun sendToLens(u: Uri, retry: Boolean = true) {
         lensTag = tagNow()
         val source = lensSource
@@ -705,8 +707,10 @@ class CircleService : AccessibilityService() {
             return
         }
         try {
+            val style = circleStyle()
+            Slot.grantUntil = System.currentTimeMillis() + 4 * 60000L
             val o = ActivityOptions.makeBasic()
-            if (Store.b("circle_float", true)) {
+            if (style == "float") {
                 val dm = resources.displayMetrics
                 val w = (dm.widthPixels * Store.i("circle_w", 42).coerceIn(30, 70) / 100f).toInt()
                 val h = (dm.heightPixels * Store.i("circle_h", 62).coerceIn(40, 90) / 100f).toInt()
@@ -717,13 +721,24 @@ class CircleService : AccessibilityService() {
                         "center" -> (dm.heightPixels - h) / 2
                         else -> T.dp(36)
                     }
-                // Bounds only: a freeform window is used when the device allows it, otherwise Lens opens normally on top.
-                // The hidden windowing-mode hack is gone: it threw NoSuchMethodException and could push the circled app out of the screen.
+                // Needs the tablet's freeform / small-window support; where it is missing, Lens simply opens on top.
                 o.setLaunchBounds(Rect(l, t, l + w, t + h))
             }
             val ob = o.toBundle() ?: Bundle()
-            Slot.grantUntil = System.currentTimeMillis() + 4 * 60000L
-            startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), ob)
+            val go = {
+                try {
+                    startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or (if (style == "split") Intent.FLAG_ACTIVITY_LAUNCH_ADJACENT else 0)), ob)
+                } catch (e: Exception) {
+                    Log.e("circle-lens-go", e)
+                    share(u, "Search with")
+                }
+            }
+            if (style == "split" && source.isNotBlank() && source != packageName && retry) {
+                // Side by side: the circled app stays visible and running on one half, Lens opens on the other half.
+                if (global(this, AccessibilityService.GLOBAL_ACTION_TOGGLE_SPLIT_SCREEN)) ui.postDelayed({ go() }, 750) else go()
+            } else {
+                go()
+            }
             toast("Google Lens  -  $lensTag")
             checkFloat()
             lensAuto(0)
@@ -809,11 +824,11 @@ class CircleService : AccessibilityService() {
     private fun verifyLens(source: String, u: Uri) {
         ui.postDelayed({
             try {
-                if (!Store.b("circle_float", true)) return@postDelayed
+                if (circleStyle() == "full") return@postDelayed
                 val vis = visiblePackages()
                 if (vis.isEmpty() || vis.any { it in LENS_PACKAGES } || (source.isNotBlank() && source in vis)) return@postDelayed
-                Store.put("circle_float", false)
-                toast("Floating window failed here, using full screen Lens")
+                Store.put("circle_style", "full")
+                toast("Side window failed here, using full screen Lens")
                 sendToLens(u, false)
             } catch (e: Exception) {
                 Log.e("circle-verify", e)

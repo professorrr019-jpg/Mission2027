@@ -1934,7 +1934,7 @@ class SettingsActivity : Activity() {
                 "lens",
                 listOf("lens" to "Google Lens (floating, UPSC Prelims 2027 tag, auto search)", "gemini" to "Gemini app (floating, UPSC Prelims 2027 tag)", "ask" to "Ask me every time (Gemini, Lens, share)"),
             ),
-            sw("Floating Lens / Gemini window", "Small window on the right so your notes stay visible", "circle_float", true),
+            choice("Lens window style", "circle_style", "split", listOf("split" to "Side by side (circled app stays open)", "float" to "Floating small window (needs freeform support)", "full" to "Full screen")),
             choice("Floating window position", "circle_corner", "top", listOf("top" to "Right corner, top", "center" to "Right side, middle", "bottom" to "Right corner, bottom")),
             num("Floating window width", "circle_w", 42, 30, 70, "%"),
             num("Floating window height", "circle_h", 62, 40, 90, "%"),
