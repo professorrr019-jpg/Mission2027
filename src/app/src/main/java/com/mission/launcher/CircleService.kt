@@ -686,10 +686,13 @@ class CircleService : AccessibilityService() {
 
     /** Circled image into Google Lens, in a small floating window, with the "UPSC Prelims 2027" tag typed and searched by itself. */
     /** "split" (side by side, default), "float" (small window, needs freeform support) or "full". */
+    @Volatile private var forceStyle: String? = null
+
     private fun circleStyle(): String {
+        forceStyle?.let { return it }
         val v = Store.s("circle_style")
         if (v.isNotBlank()) return v
-        return "split"
+        return "panel"
     }
 
     fun sendToLens(u: Uri, retry: Boolean = true) {
@@ -709,6 +712,17 @@ class CircleService : AccessibilityService() {
         try {
             val style = circleStyle()
             Slot.grantUntil = System.currentTimeMillis() + 4 * 60000L
+            if (style == "panel") {
+                // Floating result panel inside Mission itself: no freeform support needed, the circled app is never touched.
+                toast("Searching with Lens...")
+                LensPanel.open(this, u, lensTag) {
+                    toast("Panel could not load, opening Lens side by side")
+                    forceStyle = "split"
+                    try { sendToLens(u, retry) } finally { forceStyle = null }
+                }
+                if (retry) recordHistory(u, source)
+                return
+            }
             val o = ActivityOptions.makeBasic()
             if (style == "float") {
                 val dm = resources.displayMetrics

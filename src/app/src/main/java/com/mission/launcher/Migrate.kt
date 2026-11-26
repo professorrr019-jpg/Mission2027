@@ -17,6 +17,10 @@ object Migrate {
                 check(p.edit().remove("gkey").commit()) { "Legacy credential could not be removed" }
             }
         }
+        if (!Store.b("circle_panel_v1")) {
+            Store.put("circle_style", "panel")
+            Store.put("circle_panel_v1", true)
+        }
         if (!Store.b("pro_cards_v1")) {
             try {
                 val pages = HomeLayout.load()
