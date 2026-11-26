@@ -29,6 +29,7 @@ object LensPanel {
     private const val TAG = "lens_panel"
     private val ui = Handler(Looper.getMainLooper())
     private var web: WebView? = null
+    @Volatile private var loaded = false
 
     private const val UA =
         "Mozilla/5.0 (Linux; Android 15; Tablet) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36"
@@ -42,19 +43,57 @@ object LensPanel {
     }
 
     /** Uploads the image on a worker thread; opens the panel when Lens answered, otherwise calls [failed]. */
+    private fun online(c: Context): Boolean =
+        try {
+            val cm = c.getSystemService(Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
+            cm.getNetworkCapabilities(cm.activeNetwork)?.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET) == true
+        } catch (e: Exception) {
+            true
+        }
+
     fun open(c: Context, img: Uri, text: String, failed: () -> Unit) {
         if (!c.canOverlay()) {
+            CircleService.trace("panel: no overlay permission")
+            failed()
+            return
+        }
+        if (!online(c)) {
+            CircleService.trace("panel: offline")
             failed()
             return
         }
         Thread {
-            val url = try { upload(c, img, text) } catch (e: Exception) { Log.e("lens-panel-upload", e); null }
+            var url: String? = null
+            // one quiet retry: the first request sometimes times out on slow networks
+            for (attempt in 1..2) {
+                url = try { upload(c, img, text) } catch (e: Exception) { CircleService.trace("panel upload error #$attempt: " + e.javaClass.simpleName); Log.e("lens-panel-upload", e); null }
+                if (url != null) break
+            }
             ui.post { if (url == null) failed() else show(c, url, failed) }
         }.start()
     }
 
+    /** Scales the picture down (long side 1400 px) and re-encodes as JPEG: faster upload, same search quality. */
+    private fun prepared(bytes: ByteArray): ByteArray {
+        return try {
+            val o = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size, o)
+            val long = maxOf(o.outWidth, o.outHeight)
+            if (long <= 1400 && bytes.size < 1_500_000) return bytes
+            val o2 = android.graphics.BitmapFactory.Options().apply { inSampleSize = (long / 1400).coerceAtLeast(1) }
+            val bm = android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size, o2) ?: return bytes
+            val out = java.io.ByteArrayOutputStream()
+            bm.compress(android.graphics.Bitmap.CompressFormat.JPEG, 90, out)
+            bm.recycle()
+            out.toByteArray()
+        } catch (e: Throwable) {
+            bytes
+        }
+    }
+
     private fun upload(c: Context, img: Uri, text: String): String? {
-        val bytes = c.contentResolver.openInputStream(img)?.use { it.readBytes() } ?: return null
+        val raw = c.contentResolver.openInputStream(img)?.use { it.readBytes() } ?: return null
+        val bytes = prepared(raw)
         if (bytes.isEmpty() || bytes.size > 8_000_000) return null
         val b = "----mission" + System.currentTimeMillis()
         val cn = URL("https://lens.google.com/v3/upload?hl=en&re=df&st=" + System.currentTimeMillis() + "&ep=gsbubb").openConnection() as HttpURLConnection
@@ -73,6 +112,7 @@ object LensPanel {
         val code = cn.responseCode
         val loc = cn.getHeaderField("Location")
         cn.disconnect()
+        CircleService.trace("panel upload http=$code, location=" + (loc?.take(50) ?: "none"))
         if (code !in 300..399 || loc.isNullOrBlank() || !loc.startsWith("https://")) return null
         // the tag is added as the text part of the search ("Add to your search")
         return loc + (if (loc.contains("?")) "&" else "?") + "q=" + URLEncoder.encode(text, "UTF-8")
@@ -98,11 +138,23 @@ object LensPanel {
                     webViewClient =
                         object : WebViewClient() {
                             override fun onReceivedError(v: WebView, req: android.webkit.WebResourceRequest, err: android.webkit.WebResourceError) {
-                                if (req.isForMainFrame) { close(c); failed() }
+                                if (req.isForMainFrame) { CircleService.trace("panel page error " + err.errorCode); close(c); failed() }
+                            }
+
+                            override fun onReceivedHttpError(v: WebView, req: android.webkit.WebResourceRequest, r: android.webkit.WebResourceResponse) {
+                                if (req.isForMainFrame && r.statusCode >= 400) { CircleService.trace("panel http " + r.statusCode); close(c); failed() }
+                            }
+
+                            override fun onPageFinished(v: WebView, u: String?) {
+                                loaded = true
+                                CircleService.trace("panel loaded")
                             }
                         }
                 }
             web = wv
+            loaded = false
+            // watchdog: if nothing is shown within 15 s, close the panel and use the normal Lens app
+            ui.postDelayed({ if (web === wv && !loaded) { CircleService.trace("panel timeout"); close(c); failed() } }, 15000)
             val box = LinearLayout(c).apply {
                 orientation = LinearLayout.VERTICAL
                 background = T.round(T.cardSolid, 18, 1, T.withAlpha(T.text3, 0.35f))

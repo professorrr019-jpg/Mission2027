@@ -9,6 +9,7 @@ import android.app.ActivityOptions
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.view.accessibility.AccessibilityNodeInfo
+import android.view.accessibility.AccessibilityWindowInfo
 import android.app.PendingIntent
 import android.content.ContentValues
 import android.content.Context
@@ -70,6 +71,19 @@ class CircleService : AccessibilityService() {
         }
 
         @Volatile var lensTag: String = TAG
+        @Volatile var lastRect: android.graphics.Rect? = null
+
+        /** Step-by-step trace of the last circle searches, shown in Settings so a failure can be located exactly. */
+        fun trace(step: String) {
+            try {
+                val l = (Store.stringList("circle_trace") + (java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date()) + "  " + step)).takeLast(60)
+                Store.setStringList("circle_trace", l)
+            } catch (e: Exception) {
+                Log.e("circle-trace", e)
+            }
+        }
+
+        fun traceText(): String = Store.stringList("circle_trace").joinToString("\n").ifBlank { "No circle search yet" }
         const val GEMINI = "com.google.android.apps.bard"
         val GEMINI_PACKAGES =
             listOf(
@@ -302,9 +316,15 @@ class CircleService : AccessibilityService() {
         return super.onUnbind(i)
     }
 
+    private var lastSnap = 0L
+
     fun snap() {
         if (overlay != null) return
+        val now = System.currentTimeMillis()
+        if (now - lastSnap < 900) return
+        lastSnap = now
         lensSource = Slot.fgPkg
+        trace("start, app=" + lensSource + ", style=" + circleStyle())
         try {
             takeScreenshot(
                 Display.DEFAULT_DISPLAY,
@@ -318,10 +338,12 @@ class CircleService : AccessibilityService() {
                             } finally {
                                 hb.close()
                             }
+                        trace("screenshot " + (if (bm == null) "FAILED" else bm.width.toString() + "x" + bm.height))
                         if (bm == null) toast("Screenshot failed") else showLasso(bm)
                     }
 
                     override fun onFailure(code: Int) {
+                        trace("screenshot failure code=$code")
                         toast(
                             if (code == ERROR_TAKE_SCREENSHOT_INTERVAL_TIME_SHORT) "Wait a second and try again" else "Screenshot blocked on this screen",
                         )
@@ -364,6 +386,10 @@ class CircleService : AccessibilityService() {
         ui.post {
             add(
                 Lasso(this, bm, { crop ->
+                    trace("lasso " + (if (crop == null) "cancelled" else crop.width.toString() + "x" + crop.height))
+                    screenText = ""
+                    if (crop != null && Store.b("circle_read_text", true)) screenText = readScreenText(lastRect)
+                    if (screenText.isNotBlank()) trace("screen text: " + screenText.take(60))
                     if (crop == null) {
                         closeOverlay()
                     } else if (Store.s("circle_target", "lens") == "gemini" && sendToGemini(crop)) {
@@ -373,6 +399,7 @@ class CircleService : AccessibilityService() {
                         toast("Opening Google Lens...")
                         Thread {
                             val u = saveImage(crop)
+                            trace("image saved: " + (u != null))
                             ui.post { if (u != null) sendToLens(u) else showResult(crop) }
                         }.start()
                     } else {
@@ -382,6 +409,43 @@ class CircleService : AccessibilityService() {
                 }, { closeOverlay() }),
             )
         }
+    }
+
+    @Volatile private var screenText = ""
+
+    /** Reads the words that sit under the circled area straight from the screen (accessibility tree), so the search knows what was circled. */
+    private fun readScreenText(r: android.graphics.Rect?): String {
+        if (r == null) return ""
+        val out = LinkedHashSet<String>()
+        var seen = 0
+        fun walk(n: AccessibilityNodeInfo?, depth: Int) {
+            if (n == null || depth > 40 || seen > 600) return
+            seen++
+            try {
+                if (n.isVisibleToUser) {
+                    val b = android.graphics.Rect()
+                    n.getBoundsInScreen(b)
+                    val inter = android.graphics.Rect(b)
+                    if (inter.intersect(r) && b.width() > 0 && b.height() > 0) {
+                        val share = inter.width().toLong() * inter.height() / (b.width().toLong() * b.height()).coerceAtLeast(1)
+                        val txt = (n.text?.toString() ?: n.contentDescription?.toString() ?: "").trim()
+                        if (txt.length in 2..160 && share >= 0.5f && n.childCount == 0) out.add(txt.replace(Regex("\\s+"), " "))
+                    }
+                }
+                for (i in 0 until n.childCount) walk(n.getChild(i), depth + 1)
+            } catch (e: Exception) {
+                Log.e("circle-read", e)
+            }
+        }
+        try {
+            windows.filter { it.type == AccessibilityWindowInfo.TYPE_APPLICATION }.forEach { w ->
+                val root = w.root
+                if (root != null && root.packageName?.toString() != packageName) walk(root, 0)
+            }
+        } catch (e: Exception) {
+            Log.e("circle-read", e)
+        }
+        return out.joinToString(" ").take(140)
     }
 
     private fun showResult(crop: Bitmap) {
@@ -696,7 +760,8 @@ class CircleService : AccessibilityService() {
     }
 
     fun sendToLens(u: Uri, retry: Boolean = true) {
-        lensTag = tagNow()
+        lensTag = (tagNow() + (if (screenText.isNotBlank()) " " + screenText.take(100) else "")).trim()
+        trace("send to Lens, style=" + circleStyle() + ", query=" + lensTag.take(60))
         val source = lensSource
         try {
             (getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("UPSC tag", lensTag))
@@ -716,6 +781,7 @@ class CircleService : AccessibilityService() {
                 // Floating result panel inside Mission itself: no freeform support needed, the circled app is never touched.
                 toast("Searching with Lens...")
                 LensPanel.open(this, u, lensTag) {
+                    trace("panel failed, fallback to split")
                     toast("Panel could not load, opening Lens side by side")
                     forceStyle = "split"
                     try { sendToLens(u, retry) } finally { forceStyle = null }
@@ -744,6 +810,7 @@ class CircleService : AccessibilityService() {
                     startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or (if (style == "split") Intent.FLAG_ACTIVITY_LAUNCH_ADJACENT else 0)), ob)
                 } catch (e: Exception) {
                     Log.e("circle-lens-go", e)
+                    trace("lens launch failed: " + e.javaClass.simpleName)
                     share(u, "Search with")
                 }
             }
@@ -1015,6 +1082,7 @@ private class Lasso(c: Context, val bm: Bitmap, val done: (Bitmap?) -> Unit, val
                 val y0 = ((t - pad) * sy).toInt().coerceIn(0, bm.height - 2)
                 val x1 = ((r + pad) * sx).toInt().coerceIn(x0 + 1, bm.width)
                 val y1 = ((b + pad) * sy).toInt().coerceIn(y0 + 1, bm.height)
+                CircleService.lastRect = android.graphics.Rect((l - pad).toInt(), (t - pad).toInt(), (r + pad).toInt(), (b + pad).toInt())
                 done(
                     try {
                         Bitmap.createBitmap(bm, x0, y0, x1 - x0, y1 - y0)

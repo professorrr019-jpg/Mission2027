@@ -1951,6 +1951,8 @@ class SettingsActivity : Activity() {
             },
             sw("Add subject of the running timer", "UPSC Prelims 2027 Polity while a Polity timer runs", "circle_subject", true),
             sw("Reopen the circled app if it closes", "Off by default. Only if the app vanished and Lens is not on screen", "circle_restore", false),
+            sw("Read the circled words from the screen", "The text under your circle is added to the Lens search", "circle_read_text", true),
+            action("info", T.amber, "Circle search trace", "Every step of the last searches: shows where it fails") { Dlg.info(c, "Circle search trace", CircleService.traceText()) },
             action("clock", T.plum, "Circle search history", "Last 20 circled images, tap to search again") { CircleService.history(c as android.app.Activity) },
             sw("Add 'UPSC Prelims 2027' tag", "Sent with every circled image so answers are exam focused", "circle_tag", true),
             value("Prompt sent with the image", null, CircleService.geminiPrompt().take(60) + "...") {
