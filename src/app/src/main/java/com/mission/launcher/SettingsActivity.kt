@@ -859,7 +859,6 @@ class SettingsActivity : Activity() {
         group(
             num("Pomodoro focus", "pomo_work", 25, 5, 120, "min"),
             num("Pomodoro break", "pomo_break", 5, 1, 60, "min"),
-            num("Break reminder every", "timer_break_every", 50, 0, 120, "min", "Stopwatch timer: notification to rest eyes and stand up. 0 = off"),
             sw("Hour milestones", "Notification at every full hour of a running timer", "timer_milestones", true),
             sw("Alert when the daily goal is reached", "One notification a day", "timer_goal_alert", true),
             sw("Auto-pause on distraction apps", "Pauses on YouTube, music, reels and your distraction list. Needs Usage access", "timer_auto_pause", true) {
@@ -992,7 +991,6 @@ class SettingsActivity : Activity() {
         )
         label("Weather-aware rendering")
         group(
-            sw("Weather effects", "Use modeled fog, clouds, rain and snow in procedural scenes", "wp_weather", true) { updateWeather() },
             choice(
                 "Weather city",
                 "wp_weather_city",

@@ -535,7 +535,7 @@ object Toolkit {
         val exam = Repo.examDate()
         val left = java.time.temporal.ChronoUnit.DAYS.between(today(), exam)
         val box = c.vbox()
-        box.addView(c.text("$left days to ${Store.s("exam_name", "Prelims 2027")} (${exam})", 15f, 2, T.accent))
+        box.addView(c.text("$left days to ${Store.s("exam_name", "UPSC Prelims 2027")} (${exam})", 15f, 2, T.accent))
         val phase =
             when {
                 left > 200 -> "Foundation phase: finish the syllabus once, build notes."

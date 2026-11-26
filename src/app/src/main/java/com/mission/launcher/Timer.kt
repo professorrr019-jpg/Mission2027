@@ -438,7 +438,7 @@ class TimerService : Service() {
         )
     }
 
-    /** Stopwatch extras: break reminder every N minutes (20-20-20 eye rest), hour milestones, daily goal reached. */
+    /** Stopwatch extras: hour milestones and daily goal reached. */
     private fun studyNudges() {
         if (TimerState.mode() == "pomo" || !TimerState.running()) return
         val (ms, cd) = shownMs()
@@ -447,8 +447,6 @@ class TimerService : Service() {
         if (min < nudgeMark) nudgeMark = 0
         if (min == nudgeMark) return
         nudgeMark = min
-        val every = Store.i("timer_break_every", 50)
-        if (every > 0 && min > 0 && min % every == 0) nudge(5010, "$min min studied: take a break", "Look 20 feet away for 20 seconds, sip water, stand up for 5 minutes.")
         if (Store.b("timer_milestones", true) && min > 0 && min % 60 == 0) nudge(5011, (min / 60).toString() + " hour(s) of " + TimerState.subject(), "Keep the flow. Note the topic you just finished.")
         if (Store.b("timer_goal_alert", true)) {
             val goal = Store.i("study_goal_min", 360)
