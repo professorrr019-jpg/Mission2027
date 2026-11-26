@@ -186,6 +186,38 @@ object LauncherHaptics {
         view.performHapticFeedback(effect)
     }
 
+    /** A page snapped into place: a short, light tick like a segmented control. */
+    fun page(view: android.view.View) {
+        if (!view.isHapticFeedbackEnabled || mode() == "off") return
+        val soft = mode() == "soft"
+        view.performHapticFeedback(
+            if (android.os.Build.VERSION.SDK_INT >= 34 && !soft) android.view.HapticFeedbackConstants.SEGMENT_TICK else android.view.HapticFeedbackConstants.CLOCK_TICK,
+        )
+    }
+
+    /** Switch flipped: distinct on and off feedback (Android 14+), a normal tap before that. */
+    fun toggle(view: android.view.View, on: Boolean) {
+        if (!view.isHapticFeedbackEnabled || mode() == "off") return
+        view.performHapticFeedback(
+            if (android.os.Build.VERSION.SDK_INT >= 34) {
+                if (on) android.view.HapticFeedbackConstants.TOGGLE_ON else android.view.HapticFeedbackConstants.TOGGLE_OFF
+            } else {
+                android.view.HapticFeedbackConstants.KEYBOARD_TAP
+            },
+        )
+    }
+
+    /** Long-press or drag begins / ends: heavier feedback like picking an icon up on iOS. */
+    fun lift(view: android.view.View) {
+        if (!view.isHapticFeedbackEnabled || mode() == "off") return
+        view.performHapticFeedback(if (android.os.Build.VERSION.SDK_INT >= 30) android.view.HapticFeedbackConstants.GESTURE_START else android.view.HapticFeedbackConstants.LONG_PRESS)
+    }
+
+    fun drop(view: android.view.View) {
+        if (!view.isHapticFeedbackEnabled || mode() == "off") return
+        view.performHapticFeedback(if (android.os.Build.VERSION.SDK_INT >= 30) android.view.HapticFeedbackConstants.GESTURE_END else android.view.HapticFeedbackConstants.KEYBOARD_RELEASE)
+    }
+
     fun reject(view: android.view.View) {
         if (!view.isHapticFeedbackEnabled) return
         if (mode() == "off") return

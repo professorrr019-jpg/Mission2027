@@ -71,18 +71,21 @@ class Pager(c: Context) : FrameLayout(c) {
         animate: Boolean = true,
     ) {
         val t = i.coerceIn(0, maxOf(0, childCount - 1))
+        val changed = t != index
         index = t
         anim?.cancel()
         if (!animate || Store.b("reduce_motion", false)) {
             pos = t.toFloat()
             applyPos()
+            if (changed) LauncherHaptics.page(this)
             onSettled?.invoke(t)
             return
         }
         anim =
             ValueAnimator.ofFloat(pos, t.toFloat()).apply {
-                duration = 260
-                interpolator = DecelerateInterpolator(1.6f)
+                duration = 340
+                // iOS-like ease: quick start, long soft landing
+                interpolator = android.view.animation.PathInterpolator(0.22f, 0.9f, 0.25f, 1f)
                 layers(true)
                 addUpdateListener {
                     pos = it.animatedValue as Float
@@ -92,6 +95,7 @@ class Pager(c: Context) : FrameLayout(c) {
                     object : android.animation.AnimatorListenerAdapter() {
                         override fun onAnimationEnd(a: android.animation.Animator) {
                             layers(false)
+                            if (changed) LauncherHaptics.page(this@Pager)
                             onSettled?.invoke(t)
                         }
                     },

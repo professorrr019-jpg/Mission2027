@@ -252,6 +252,7 @@ class MainActivity : Activity(), Host {
         }
         pager.onSettled = { Store.put("home_page", it) }
         dots.setOnLongClickListener {
+            LauncherHaptics.lift(it)
             toggleEdit()
             true
         }
@@ -549,7 +550,7 @@ class MainActivity : Activity(), Host {
         val col = vbox()
         val wide = resources.configuration.screenWidthDp > 700
         col.setPadding(T.dp(if (wide) 24 else 14), T.dp(8), T.dp(if (wide) 24 else 14), T.dp(maxOf(60, Store.i("dock_icon", 15).coerceIn(10, 72) + 18 + 14 + 24)) + botInset)
-        val ids = if (Store.b("safe_mode", false)) emptyList() else HomeLayout.cards(p)
+        val ids = if (Store.b("safe_mode", false)) emptyList() else HomeLayout.cards(p).let { l -> if (!editing && StudyMode.on()) l.filter { it in StudyMode.ALLOWED } else l }
         if (editing) {
             col.addView(text(p.optString("name") + "  (page ${i + 1}/${layout.length()})", 13f, 3, T.text2).apply { padDp(6, 6, 6, 6) })
         } else if (i > 0 && ids.firstOrNull() != "header") {
@@ -1187,6 +1188,7 @@ class MainActivity : Activity(), Host {
                     pressScale()
                     setOnClickListener { Apps.launch(this@MainActivity, e.pkg) }
                     setOnLongClickListener {
+                        LauncherHaptics.lift(it)
                         Dlg.choose(
                             this@MainActivity,
                             e.label,

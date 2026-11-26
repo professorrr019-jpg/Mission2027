@@ -258,3 +258,10 @@ object LockInfo {
         }
     }
 }
+
+/** Study mode home: while a timer or a strict slot runs, the home pages show only study cards (no weather, news, AI or widgets). */
+object StudyMode {
+    val ALLOWED = setOf("header", "timer", "targets", "score", "pace", "nexttopic", "plan", "revision", "notes", "thinkers", "countdown", "focus", "heat", "water", "important", "tools")
+
+    fun on(): Boolean = Store.b("study_mode_home", true) && (TimerState.active() || Slot.strictOn())
+}

@@ -258,6 +258,7 @@ class SettingsActivity : Activity() {
             }
         s.setOnCheckedChangeListener { _, on ->
             Store.put(key, on)
+            LauncherHaptics.toggle(s, on)
             after?.invoke(on)
         }
         return rowBase(null, 0, t, sub, s) { s.toggle() }
@@ -859,6 +860,7 @@ class SettingsActivity : Activity() {
         group(
             num("Pomodoro focus", "pomo_work", 25, 5, 120, "min"),
             num("Pomodoro break", "pomo_break", 5, 1, 60, "min"),
+            sw("Study mode home screen", "While a timer or strict slot runs, home shows only study cards", "study_mode_home", true) { Store.changed() },
             sw("Today on the lock screen", "Silent notification: days left, score, target and timer", "lock_info", true) { LockInfo.update(c) },
             sw("Hour milestones", "Notification at every full hour of a running timer", "timer_milestones", true),
             sw("Alert when the daily goal is reached", "One notification a day", "timer_goal_alert", true),
@@ -1083,7 +1085,8 @@ class SettingsActivity : Activity() {
             sw("Hide bottom navigation bar", "Removes the gesture pill on home. Swipe up from the bottom edge to show it briefly", "hide_nav", true),
             sw("Auto-hiding left edge handle", "Tap to open the app drawer; hidden after inactivity", "edge_handle", false),
             sw("Lock home layout", "Prevent accidental add, remove and move actions", "lock_home_layout", false),
-            sw("Launcher haptics", "Use light confirmation feedback for launcher actions", "launcher_haptics", true),
+            sw("Launcher haptics", "Real device haptics for taps, switches, page changes and long-press", "launcher_haptics", true),
+            choice("Haptic feel", "launcher_haptic_style", "crisp", listOf("crisp" to "Crisp (iPhone-like)", "soft" to "Soft")),
             choice(
                 "Haptic character",
                 "launcher_haptic_style",
