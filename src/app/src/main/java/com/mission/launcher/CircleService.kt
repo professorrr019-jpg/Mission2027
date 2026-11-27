@@ -313,7 +313,15 @@ class CircleService : AccessibilityService() {
         inst = null
         removeEdges()
         closeOverlay()
+        try { LensPanel.close(this) } catch (e: Exception) { Log.e("circleservice", e) }
+        ui.removeCallbacksAndMessages(null)
         return super.onUnbind(i)
+    }
+
+    override fun onDestroy() {
+        try { LensPanel.close(this) } catch (e: Exception) { Log.e("circleservice", e) }
+        ui.removeCallbacksAndMessages(null)
+        super.onDestroy()
     }
 
     private var lastSnap = 0L
