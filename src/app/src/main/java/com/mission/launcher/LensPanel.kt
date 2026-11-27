@@ -30,13 +30,23 @@ object LensPanel {
     private val ui = Handler(Looper.getMainLooper())
     private var web: WebView? = null
     @Volatile private var loaded = false
+    private var dog: Runnable? = null
 
     private const val UA =
         "Mozilla/5.0 (Linux; Android 15; Tablet) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36"
 
     fun close(c: Context) {
         ui.post {
-            try { web?.stopLoading(); web?.destroy() } catch (e: Exception) { Log.e("lens-panel", e) }
+            dog?.let { ui.removeCallbacks(it) }
+            dog = null
+            try {
+                web?.let { w ->
+                    w.stopLoading()
+                    w.webViewClient = WebViewClient()
+                    (w.parent as? android.view.ViewGroup)?.removeView(w)
+                    w.destroy()
+                }
+            } catch (e: Exception) { Log.e("lens-panel", e) }
             web = null
             Overlay.remove(c, TAG)
         }
@@ -114,8 +124,9 @@ object LensPanel {
         cn.disconnect()
         CircleService.trace("panel upload http=$code, location=" + (loc?.take(50) ?: "none"))
         if (code !in 300..399 || loc.isNullOrBlank() || !loc.startsWith("https://")) return null
-        // the tag is added as the text part of the search ("Add to your search")
-        return loc + (if (loc.contains("?")) "&" else "?") + "q=" + URLEncoder.encode(text, "UTF-8")
+        // The plain image-result address. Adding "q=" here turned it into a text-only search and lost the picture, so the tag is added
+        // only on request (button in the panel header).
+        return loc
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -145,6 +156,12 @@ object LensPanel {
                                 if (req.isForMainFrame && r.statusCode >= 400) { CircleService.trace("panel http " + r.statusCode); close(c); failed() }
                             }
 
+                            override fun shouldOverrideUrlLoading(v: WebView, req: android.webkit.WebResourceRequest): Boolean {
+                                // never let a result link open another app (googleapp:, intent:, market:) and pull you out of the panel
+                                val s = req.url.scheme ?: ""
+                                return s != "https" && s != "http"
+                            }
+
                             override fun onPageFinished(v: WebView, u: String?) {
                                 loaded = true
                                 CircleService.trace("panel loaded")
@@ -154,7 +171,9 @@ object LensPanel {
             web = wv
             loaded = false
             // watchdog: if nothing is shown within 15 s, close the panel and use the normal Lens app
-            ui.postDelayed({ if (web === wv && !loaded) { CircleService.trace("panel timeout"); close(c); failed() } }, 15000)
+            dog?.let { ui.removeCallbacks(it) }
+            dog = Runnable { if (web === wv && !loaded) { CircleService.trace("panel timeout"); close(c); failed() } }
+            ui.postDelayed(dog!!, 15000)
             val box = LinearLayout(c).apply {
                 orientation = LinearLayout.VERTICAL
                 background = T.round(T.cardSolid, 18, 1, T.withAlpha(T.text3, 0.35f))
@@ -167,6 +186,11 @@ object LensPanel {
                 background = T.round(T.inset, 0)
             }
             bar.addView(c.text("Lens  |  " + Store.s("circle_tag_text").ifBlank { CircleService.TAG }, 12.5f, 3, T.text), LinearLayout.LayoutParams(0, -2, 1f))
+            bar.addView(c.pill("+ Tag", null, false) {
+                // adds the tag as extra words to this image search
+                val cur = wv.url ?: url
+                if (!cur.contains("&q=") && !cur.contains("?q=")) wv.loadUrl(cur + (if (cur.contains("?")) "&" else "?") + "q=" + URLEncoder.encode(Store.s("circle_tag_text").ifBlank { CircleService.TAG }, "UTF-8"))
+            }, lpm(-2, -2, 0, 0, 6, 0))
             bar.addView(c.pill("Open", null, false) {
                 try { c.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(wv.url ?: url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } catch (e: Exception) { Log.e("lens-panel", e) }
             }, lpm(-2, -2, 0, 0, 6, 0))
