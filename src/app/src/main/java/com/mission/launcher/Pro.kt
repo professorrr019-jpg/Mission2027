@@ -265,3 +265,48 @@ object StudyMode {
 
     fun on(): Boolean = Store.b("study_mode_home", true) && (TimerState.active() || Slot.strictOn())
 }
+
+/** Manual study hours: add time you studied without the timer (date, subject, minutes). It feeds the score, pace, heat map and targets. */
+object ManualHours {
+    fun add(a: Activity) {
+        val today = Targets.today()
+        val days = (0..6).map { today.minusDays(it.toLong()) }
+        Dlg.choose(a, "Which day?", days.mapIndexed { i, d -> (if (i == 0) "Today" else if (i == 1) "Yesterday" else d.dayOfWeek.name.lowercase().replaceFirstChar { it.uppercase() }) + "  " + d }) { di ->
+            Pyq.load(a)
+            val subs = Pyq.subjects.map { it.name } + "General / other"
+            Dlg.choose(a, "Subject", subs.map { if (it == "General / other") it else Syl.short(it) }) { si ->
+                Dlg.input(a, "Study time", "Minutes (90) or hours (1.5h)", "", false, false, "Add") { v ->
+                    val t = v.trim().lowercase()
+                    val mins = try { if (t.endsWith("h")) (t.dropLast(1).trim().toDouble() * 60).toInt() else t.toDouble().toInt() } catch (e: Exception) { 0 }
+                    if (mins !in 1..900) {
+                        a.toast("Enter a time between 1 minute and 15 hours")
+                    } else {
+                        val start = days[di].atTime(18, 0).atZone(Repo.zone()).toInstant().toEpochMilli()
+                        val subject = if (si < Pyq.subjects.size) Syl.short(subs[si]) else "General"
+                        Repo.addSession(start, start + mins * 60000L, subject, "manual")
+                        Store.changed()
+                        a.toast("Added $mins min of $subject on ${days[di]}")
+                    }
+                }
+            }
+        }
+    }
+
+    /** Recent study sessions (timer and manual). Tap a manual one to delete it. */
+    fun sessionLog(a: Activity) {
+        val rows = Store.rows("sessions").sortedByDescending { it.optLong("start") }.take(40)
+        val items = rows.map {
+            val d = java.time.Instant.ofEpochMilli(it.optLong("start")).atZone(Repo.zone()).toLocalDate()
+            d.toString() + "  " + it.optInt("mins") + " min  " + it.optString("subject") + (if (it.optString("kind") == "manual") "  (manual)" else "")
+        }
+        if (items.isEmpty()) { a.toast("No study sessions yet"); return }
+        Dlg.choose(a, "Study log (tap a manual entry to delete)", items) { i ->
+            val r = rows[i]
+            if (r.optString("kind") != "manual") {
+                a.toast("Timer sessions cannot be deleted here")
+            } else {
+                Dlg.confirm(a, "Delete this entry?", items[i], "Delete") { Store.remove("sessions", r.optString("id")); Store.changed() }
+            }
+        }
+    }
+}

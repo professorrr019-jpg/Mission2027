@@ -1746,6 +1746,8 @@ object Cards {
         val r3b = c.hbox(false)
         listOf(
             tile("grid", "PYQ explorer", T.terra) { PyqUi.explorer(h.act) },
+            tile("plus", "Add study hours", T.sage) { ManualHours.add(h.act) },
+            tile("clock", "Study log", T.teal) { ManualHours.sessionLog(h.act) },
             tile("refresh", "Restart + clean", T.danger) { Restart.ask(h.act) },
             tile("timer", "Show timer", T.teal) { TimerState.bringBack(c) },
         ).forEach { r3b.addView(it, lpm(0, -2, 0, 0, 8, 0, 1f)) }

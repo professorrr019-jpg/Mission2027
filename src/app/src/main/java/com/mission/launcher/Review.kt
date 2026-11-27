@@ -130,7 +130,7 @@ object Review {
     fun log(a: Activity) {
         val box = a.vbox()
         box.padDp(18, 6, 18, 6)
-        val rows = Store.rows(COLL).sortedByDescending { it.optLong("updatedAt") }.take(30)
+        val rows = Store.rows(COLL).sortedByDescending { it.optLong("updatedAt") }.take(150)
         if (rows.isEmpty()) box.addView(a.text("No reviews yet. They appear after you save a study session and every midnight.", 13f, 0, T.text2))
         box.addView(a.text("Backlog now: ${backlogKeys().size} topics, ${backlogMins()} min", 12.5f, 2, T.textAccent(T.amber)), lp(-2, -2, 0))
         rows.forEach { r ->
@@ -146,7 +146,7 @@ object Review {
             if (r.optString("details").isNotBlank()) card.addView(a.text(r.optString("details"), 12f, 0, T.text2), lp(-1, -2, 4))
             box.addView(card, lp(-1, -2, 8))
         }
-        Dlg.builder(a).setTitle("Review log").setView(ScrollView(a).apply { addView(box) }).setPositiveButton("Close", null).show()
+        Dlg.builder(a).setTitle("Review log").setView(ScrollView(a).apply { addView(box) }).setPositiveButton("Close", null).setNeutralButton("Add study hours") { _, _ -> ManualHours.add(a) }.setNegativeButton("Study log") { _, _ -> ManualHours.sessionLog(a) }.show()
     }
 }
 
