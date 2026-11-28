@@ -41,6 +41,38 @@ object Thinkers {
             P("Rawls", "Social and Political | Justice", listOf("Original position", "Veil of ignorance", "Difference principle", "Justice as fairness"), "न्याय के दो सिद्धांत: समान स्वतंत्रता, और विषमता केवल तब जब सबसे वंचित का हित हो।", "Rawls: Justice as fairness"),
         )
 
+    /** Well-attested lines only: name -> (quote, Hindi meaning, source). */
+    val quotes: Map<String, Triple<String, String, String>> =
+        linkedMapOf(
+            "Aristotle" to Triple("Man is by nature a political animal.", "मनुष्य स्वभाव से ही राजनीतिक (सामाजिक) प्राणी है।", "Politics"),
+            "Descartes" to Triple("Cogito, ergo sum: I think, therefore I am.", "मैं सोचता हूँ, इसलिए मैं हूँ।", "Principles of Philosophy"),
+            "Spinoza" to Triple("All things excellent are as difficult as they are rare.", "जो कुछ उत्कृष्ट है वह जितना दुर्लभ है उतना ही कठिन भी।", "Ethics, Part V"),
+            "Leibniz" to Triple("This is the best of all possible worlds.", "यह सभी संभव जगतों में सर्वश्रेष्ठ है।", "Theodicy"),
+            "Berkeley" to Triple("Esse est percipi: to be is to be perceived.", "होना ही प्रत्यक्ष होना है।", "Principles of Human Knowledge"),
+            "Hume" to Triple("Reason is, and ought only to be, the slave of the passions.", "बुद्धि भावनाओं की दासी है, और उसे यही होना चाहिए।", "A Treatise of Human Nature"),
+            "Kant" to Triple("Thoughts without content are empty, intuitions without concepts are blind.", "बिना सामग्री के विचार रिक्त, बिना अवधारणा के अंतर्दृष्टि अंधी।", "Critique of Pure Reason"),
+            "Hegel" to Triple("What is rational is actual, and what is actual is rational.", "जो बुद्धिसम्मत है वही वास्तविक है, और जो वास्तविक है वही बुद्धिसम्मत।", "Philosophy of Right"),
+            "Wittgenstein" to Triple("The limits of my language mean the limits of my world.", "मेरी भाषा की सीमाएँ ही मेरे जगत् की सीमाएँ हैं।", "Tractatus 5.6"),
+            "Sartre" to Triple("Man is condemned to be free.", "मनुष्य स्वतंत्र होने के लिए अभिशप्त है।", "Existentialism is a Humanism"),
+            "Kierkegaard" to Triple("Life can only be understood backwards; but it must be lived forwards.", "जीवन को समझा पीछे देखकर जाता है, पर जिया आगे बढ़कर जाता है।", "Journals"),
+            "Heidegger" to Triple("Language is the house of Being.", "भाषा सत्ता का घर है।", "Letter on Humanism"),
+            "Husserl" to Triple("Zu den Sachen selbst: to the things themselves!", "वस्तुओं की ओर लौटो।", "Logical Investigations"),
+            "Shankaracharya" to Triple("Brahma satyam jagan mithya, jivo brahmaiva naparah.", "ब्रह्म सत्य है, जगत् मिथ्या है, जीव ब्रह्म ही है, भिन्न नहीं।", "Brahmajnanavali"),
+            "Buddha | Nagarjuna" to Triple("Atta dipa viharatha: be a lamp unto yourselves.", "अप्प दीपो भव: स्वयं अपने दीपक बनो।", "Mahaparinibbana Sutta"),
+            "Mahavira | Jain" to Triple("Parasparopagraho jivanam: souls render service to one another.", "जीव परस्पर एक-दूसरे के उपकारक हैं।", "Tattvartha Sutra"),
+            "Gandhi" to Triple("Truth is God.", "सत्य ही ईश्वर है।", "Gandhi's own formulation"),
+            "Ambedkar" to Triple("Educate, agitate, organize.", "शिक्षित बनो, आंदोलन करो, संगठित रहो।", "Ambedkar's motto"),
+        )
+
+    private var qShift = 0
+
+    /** Quote shown today; [qShift] lets the user step through more without changing the daily pick. */
+    fun quoteOfDay(): Pair<String, Triple<String, String, String>> {
+        val l = quotes.entries.toList()
+        val e = l[Math.floorMod(Targets.today().toEpochDay().toInt() + qShift, l.size)]
+        return e.key to e.value
+    }
+
     fun today(): P = all[(Targets.today().toEpochDay() % all.size).toInt()]
 
     private fun body(c: Activity, p: P, col: Int): View {
@@ -69,8 +101,33 @@ object Thinkers {
         val p = today()
         val col = T.palette[all.indexOf(p) % T.palette.size]
         val card = Card(c)
-        card.addView(c.cardHeader("book", "Thinker of the day", col))
-        card.addView(c.text(p.name, 20f, 3, T.textAccent(col)), lp(-2, -2, 6))
+        card.addView(c.cardHeader("book", "Philosophy quote of the day", col))
+        val qBox = c.vbox()
+        card.addView(qBox, lp(-1, -2, 6))
+        fun drawQuote() {
+            qBox.removeAllViews()
+            val (who, q) = quoteOfDay()
+            val qc = T.palette[Math.floorMod(all.indexOfFirst { it.name == who }, T.palette.size)]
+            qBox.addView(c.text("\u201C" + q.first + "\u201D", 17f, 3, T.textAccent(qc)), lp(-1, -2, 2))
+            qBox.addView(c.text(q.second, 14f, 2, T.text), lp(-1, -2, 6))
+            qBox.addView(c.text("- $who  |  ${q.third}", 11.5f, 1, T.text3), lp(-2, -2, 4))
+            qBox.addView(
+                c.hbox().apply {
+                    addView(c.pill("Next quote", "refresh", false, qc) { qShift++; drawQuote() })
+                    addView(
+                        c.pill("Copy", "note", false, qc) {
+                            val cm = c.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                            cm.setPrimaryClip(android.content.ClipData.newPlainText("quote", "\"${q.first}\" - $who (${q.third})"))
+                            c.toast("Copied")
+                        },
+                        lpm(-2, -2, 8, 0, 0, 0),
+                    )
+                },
+                lp(-2, -2, 8),
+            )
+        }
+        drawQuote()
+        card.addView(c.text("Thinker of the day: " + p.name, 15f, 3, T.textAccent(col)), lp(-2, -2, 12))
         card.addView(body(c, p, col), lp(-1, -2, 4))
         val row = c.hbox()
         row.addView(c.pill("All thinkers", "grid", false, col) { list(c) })

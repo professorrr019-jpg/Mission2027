@@ -40,6 +40,21 @@ object Migrate {
                 Log.e("migrate-pro", e)
             }
         }
+        if (!Store.b("thinkers_top_v1")) {
+            try {
+                val pages = HomeLayout.load()
+                if (pages.length() > 0) {
+                    val pg = pages.getJSONObject(0)
+                    val cs = HomeLayout.cards(pg).filter { it != "thinkers" }
+                    val at = if (cs.isNotEmpty() && cs[0] == "header") 1 else 0
+                    HomeLayout.setCards(pg, cs.take(at) + listOf("thinkers") + cs.drop(at))
+                    HomeLayout.save(pages)
+                }
+                Store.put("thinkers_top_v1", true)
+            } catch (e: Exception) {
+                Log.e("migrate-thinkers", e)
+            }
+        }
         if (!Store.b("size_v2")) {
             if (Store.i("dock_icon", 30) == 30) Store.put("dock_icon", 15)
             Store.put("size_v2", true)
