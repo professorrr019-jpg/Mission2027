@@ -1521,6 +1521,27 @@ object Cards {
             }
         card.addView(HBars(c, rows, 28), lp(-1, -2, 8))
         card.addView(c.text("Red = in your distraction list", 11f, 0, T.text3), lp(-2, -2, 4))
+        val dist = (u.filter { it.first in block }.sumOf { it.second } / 60000).toInt()
+        val insight = c.text("Distraction: ${fmtMins(dist)}", 12.5f, 1, if (dist > 60) T.danger else T.sage)
+        card.addView(insight, lp(-2, -2, 6))
+        val todayMins = total.toInt()
+        Thread {
+            try {
+                val y = LocalDate.now(Repo.zone()).minusDays(1)
+                val m = Usage.on(c, y)
+                val yTot = (m.values.sum() / 60000).toInt()
+                val yDist = (m.filterKeys { it in block }.values.sum() / 60000).toInt()
+                val dTot = todayMins - yTot
+                val line = "Distraction: ${fmtMins(dist)} (yesterday ${fmtMins(yDist)}) · Total ${if (dTot >= 0) "+" else "-"}${fmtMins(kotlin.math.abs(dTot))} vs yesterday"
+                insight.post { insight.text = line }
+            } catch (e: Exception) {
+                Log.e("usage", e)
+            }
+        }.start()
+        card.addView(
+            c.pill("Edit distraction list in Settings", "shield", false, T.clay) { c.startActivity(Intent(c, SettingsActivity::class.java)) },
+            lp(-2, -2, 6),
+        )
         return card
     }
 
