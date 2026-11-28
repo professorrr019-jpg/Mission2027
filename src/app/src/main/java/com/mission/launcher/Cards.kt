@@ -876,6 +876,33 @@ object Cards {
     }
 
     // ---------------- history (Regain-style stacked graph) ----------------
+    /** All sessions of one day, grouped with subject colours. */
+    private fun dayStudy(c: android.app.Activity, d: LocalDate) {
+        val rows = Store.rows("sessions").filter { Repo.dayOf(it.optLong("start")) == d }.sortedBy { it.optLong("start") }
+        val box = c.vbox()
+        box.padDp(18, 6, 18, 6)
+        val tot = rows.sumOf { it.optInt("mins") }
+        box.addView(c.text("Total ${fmtMins(tot)} in ${rows.size} sessions", 14f, 3, T.text), lp(-2, -2, 8))
+        rows.forEach { s ->
+            val sub = s.optString("subject")
+            val col = T.subjectColor(sub)
+            val tm = java.time.Instant.ofEpochMilli(s.optLong("start")).atZone(Repo.zone()).toLocalTime()
+            val topic = s.optString("topic")
+            box.addView(
+                c.hbox().apply {
+                    padDp(10, 8, 10, 8)
+                    background = T.round(T.withAlpha(col, 0.12f), 10)
+                    addView(c.text("%02d:%02d".format(tm.hour, tm.minute), 12f, 2, T.text3), LinearLayout.LayoutParams(T.dp(46), -2))
+                    addView(c.text(sub + (if (topic.isNotBlank()) " - $topic" else ""), 13f, 2, T.textAccent(col), 2), LinearLayout.LayoutParams(0, -2, 1f))
+                    addView(c.text(fmtMins(s.optInt("mins")), 13f, 3, T.text))
+                },
+                lp(-1, -2, 4),
+            )
+        }
+        if (rows.isEmpty()) box.addView(c.emptyNote("No sessions"))
+        Dlg.view(c, "${d.dayOfMonth} ${d.month.getDisplayName(TextStyle.SHORT, Locale.ENGLISH)} study", box)
+    }
+
     private fun history(h: Host): View {
         val c = h.act
         val card = Card(c)
@@ -920,6 +947,34 @@ object Cards {
                 )
             } else {
                 holder.addView(c.chipRow(leg), lp(-1, -2, 8))
+                val tots = data.map { it.values.sum() }
+                val bestI = tots.indices.maxByOrNull { tots[it] } ?: 0
+                var streak = 0
+                for (i in tots.indices.reversed()) { if (tots[i] > 0) streak++ else if (i != tots.size - 1) break }
+                val st = c.hbox()
+                st.addView(PyqUi.chip(c, "Best ${days[bestI].dayOfMonth}/${days[bestI].monthValue}: ${fmtMins(tots[bestI])}", T.sage, true))
+                st.addView(PyqUi.chip(c, "${tots.count { it > 0 }}/$n active days", T.teal, true), lpm(-2, -2, 6, 0, 0, 0))
+                st.addView(PyqUi.chip(c, "Streak $streak d", T.amber, true), lpm(-2, -2, 6, 0, 0, 0))
+                holder.addView(c.chipRow(st), lp(-1, -2, 8))
+                holder.addView(c.text("Days (tap one)", 12f, 3, T.text2), lp(-2, -2, 10))
+                days.indices.reversed().filter { tots[it] > 0 }.take(10).forEach { i ->
+                    val d = days[i]
+                    val frac = tots[i].toFloat() / tots[bestI].coerceAtLeast(1)
+                    val topS = data[i].entries.maxByOrNull { it.value }?.key ?: ""
+                    val col = T.subjectColor(topS)
+                    holder.addView(
+                        c.hbox().apply {
+                            padDp(10, 8, 10, 8)
+                            background = T.round(T.withAlpha(col, 0.12f), 10)
+                            addView(c.text("${d.dayOfMonth} ${d.month.getDisplayName(TextStyle.SHORT, Locale.ENGLISH)}", 12.5f, 2, T.text), LinearLayout.LayoutParams(T.dp(54), -2))
+                            addView(View(c).apply { background = T.round(col, 4) }, LinearLayout.LayoutParams(0, T.dp(8), (frac * 3f).coerceAtLeast(0.08f)))
+                            addView(View(c), LinearLayout.LayoutParams(0, 1, (3f - frac * 3f).coerceAtLeast(0.01f)))
+                            addView(c.text(fmtMins(tots[i]), 12.5f, 3, T.textAccent(col)), lpm(-2, -2, 8, 0, 0, 0))
+                            tap(false) { dayStudy(c, d) }
+                        },
+                        lp(-1, -2, 4),
+                    )
+                }
             }
         }
         card.addView(
