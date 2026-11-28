@@ -1244,6 +1244,23 @@ object Cards {
                 lp(-1, -2, 10),
             )
             if (att.size >= 2) {
+                val d = last.score - att[att.size - 2].score
+                val up = d >= 0
+                card.addView(
+                    c.text(
+                        "${if (up) "▲ +" else "▼ "}${"%.1f".format(d)} vs previous · last 3 avg ${"%.0f".format(att.takeLast(3).map { it.score }.average())}",
+                        12f, 1, if (up) T.sage else T.danger,
+                    ),
+                    lp(-2, -2, 6),
+                )
+            }
+            if (last.c + last.w > 0) {
+                val acc = last.c * 100 / (last.c + last.w)
+                val attempted = last.c + last.w
+                val tip = if (acc < 70 && last.w > 0) "Accuracy $acc%: cut guesses, wrong answers cost negative marks." else "Accuracy $acc% on $attempted attempted."
+                card.addView(c.text(tip, 11.5f, 0, T.text2), lp(-2, -2, 4))
+            }
+            if (att.size >= 2) {
                 card.addView(
                     LineChart(
                         c,
