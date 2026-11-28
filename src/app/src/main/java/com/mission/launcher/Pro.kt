@@ -7,17 +7,19 @@ import android.content.Context
 import android.content.Intent
 import android.view.View
 import android.widget.LinearLayout
+import android.widget.ScrollView
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 
 /**
  * Daily score out of 100: study time 70, backlog 10, distraction apps 10, water 5, discipline (strict-mode passes) 5.
  * Study is the main part on purpose: 70 points = 70 percent of the score.
+ * Manual hours count, but only up to 25 percent of the goal, and finished days are signed so they cannot be edited later.
  */
 object DayScore {
-    class Part(val emoji: String, val label: String, val pts: Int, val max: Int, val color: Int, val note: String)
+    class Part(val key: String, val emoji: String, val label: String, val pts: Int, val max: Int, val color: Int, val note: String)
 
-    class Result(val total: Int, val parts: List<Part>, val studyMins: Int, val goal: Int)
+    class Result(val total: Int, val parts: List<Part>, val studyMins: Int, val manualMins: Int, val goal: Int)
 
     fun grade(s: Int): Triple<String, String, Int> =
         when {
@@ -28,14 +30,20 @@ object DayScore {
             else -> Triple("Needs effort", "😴", T.danger)
         }
 
+    fun sessionsOn(d: LocalDate): List<org.json.JSONObject> =
+        Store.rows("sessions").filter { java.time.Instant.ofEpochMilli(it.optLong("start")).atZone(Repo.zone()).toLocalDate() == d }
+
     fun studyMinsOn(d: LocalDate): Int = try { Repo.byDaySubject(listOf(d)).firstOrNull()?.values?.sum() ?: 0 } catch (e: Exception) { 0 }
+
+    fun manualMinsOn(d: LocalDate): Int = sessionsOn(d).filter { it.optString("kind") == "manual" }.sumOf { it.optInt("mins") }
 
     fun compute(c: Context, d: LocalDate = Targets.today()): Result {
         val goal = Store.i("study_goal_min", 360).coerceAtLeast(30)
-        var mins = studyMinsOn(d)
-        val today = d == Targets.today()
-        if (today && TimerState.active() && TimerState.running()) mins += ((System.currentTimeMillis() - Store.l("timer_seg", System.currentTimeMillis())) / 60000L).toInt().coerceAtLeast(0)
-        val study = Math.round(70f * (mins.toFloat() / goal).coerceIn(0f, 1f))
+        val manual = manualMinsOn(d)
+        var timerMins = (studyMinsOn(d) - manual).coerceAtLeast(0)
+        if (d == Targets.today() && TimerState.active() && TimerState.running()) timerMins += ((System.currentTimeMillis() - Store.l("timer_seg", System.currentTimeMillis())) / 60000L).toInt().coerceAtLeast(0)
+        val counted = timerMins + minOf(manual, goal / 4)
+        val study = Math.round(70f * (counted.toFloat() / goal).coerceIn(0f, 1f))
         val bk = Review.backlogKeys().size
         val bkMin = Review.backlogMins()
         val back = (10 - bk * 2 - bkMin / 30).coerceIn(0, 10)
@@ -55,67 +63,343 @@ object DayScore {
         val disc = (5 - used).coerceIn(0, 5)
         val parts =
             listOf(
-                Part("📚", "Study", study, 70, T.sage, "$mins of $goal min"),
-                Part("📌", "Backlog", back, 10, T.amber, if (bk == 0 && bkMin == 0) "No backlog" else "$bk topics, $bkMin min pending"),
-                Part("📵", "Distraction", dis, 10, T.rose, disNote),
-                Part("💧", "Water", water, 5, T.teal, "$ml of $wg ml"),
-                Part("🔒", "Discipline", disc, 5, T.plum, if (used == 0) "No emergency pass used" else "$used emergency pass(es)"),
+                Part("study", "📚", "Study", study, 70, T.sage, "$counted of $goal min" + (if (manual > 0) "  (manual $manual min, counted up to ${goal / 4})" else "")),
+                Part("backlog", "📌", "Backlog", back, 10, T.amber, if (bk == 0 && bkMin == 0) "No backlog" else "$bk topics, $bkMin min pending"),
+                Part("dist", "📵", "Distraction", dis, 10, T.rose, disNote),
+                Part("water", "💧", "Water", water, 5, T.teal, "$ml of $wg ml"),
+                Part("disc", "🔒", "Discipline", disc, 5, T.plum, if (used == 0) "No emergency pass used" else "$used emergency pass(es)"),
             )
-        return Result(parts.sumOf { it.pts }, parts, mins, goal)
+        return Result(parts.sumOf { it.pts }, parts, counted, manual, goal)
     }
+
+    // ---- tamper-proof history: only today can be written, every row carries a signature ----
+    private fun sig(day: String, score: Int, p: String): String = Integer.toHexString((day + "|" + score + "|" + p + "|mission-2027").hashCode())
 
     fun save(r: Result) {
         try {
             val day = Targets.today().toString()
+            val p = r.parts.joinToString(",") { it.pts.toString() }
             val ex = Store.rows("score_hist").firstOrNull { it.optString("day") == day }
-            if (ex == null) Store.add("score_hist", obj("day" to day, "score" to r.total)) else if (ex.optInt("score") != r.total) Store.update("score_hist", ex.optString("id")) { it.put("score", r.total) }
+            if (ex == null) {
+                Store.add("score_hist", obj("day" to day, "score" to r.total, "p" to p, "m" to r.studyMins, "sig" to sig(day, r.total, p)))
+            } else if (ex.optInt("score") != r.total || ex.optString("p") != p) {
+                Store.update("score_hist", ex.optString("id")) { it.put("score", r.total).put("p", p).put("m", r.studyMins).put("sig", sig(day, r.total, p)) }
+            }
         } catch (e: Exception) {
             Log.e("score-save", e)
         }
     }
 
+    /** Saved, untouched rows only. A row whose signature does not match was edited and is ignored. */
+    fun saved(): Map<String, org.json.JSONObject> =
+        Store.rows("score_hist").filter { it.optString("sig") == sig(it.optString("day"), it.optInt("score"), it.optString("p")) }.associateBy { it.optString("day") }
+
     fun history(days: Int = 7): List<Pair<LocalDate, Int?>> {
-        val rows = Store.rows("score_hist").associate { it.optString("day") to it.optInt("score") }
-        return (days - 1 downTo 0).map { Targets.today().minusDays(it.toLong()).let { d -> d to rows[d.toString()] } }
+        val rows = saved()
+        return (days - 1 downTo 0).map { Targets.today().minusDays(it.toLong()).let { d -> d to rows[d.toString()]?.optInt("score") } }
     }
 
+    private fun appName(c: Context, pkg: String): String = try { c.packageManager.getApplicationLabel(c.packageManager.getApplicationInfo(pkg, 0)).toString() } catch (e: Exception) { pkg }
+
+    /** What lies behind one score part: the real items, and how to earn the missing points. */
+    fun partDetail(a: Activity, p: Part, r: Result) {
+        val box = a.vbox()
+        box.padDp(18, 6, 18, 6)
+        box.addView(a.text(p.emoji + "  " + p.pts + " / " + p.max + " points", 16f, 3, T.textAccent(p.color)))
+        box.addView(a.text(p.note, 12.5f, 1, T.text2), lp(-2, -2, 4))
+        fun line(t: String, col: Int = T.text) = box.addView(a.text(t, 12.5f, 1, col), lp(-1, -2, 6))
+        when (p.key) {
+            "study" -> {
+                box.addView(a.text("Today's sessions", 12f, 3, T.text), lp(-2, -2, 12))
+                val ss = sessionsOn(Targets.today())
+                if (ss.isEmpty()) line("No session yet. Start the timer or add study hours.", T.text3)
+                ss.sortedBy { it.optLong("start") }.forEach {
+                    val t = java.time.Instant.ofEpochMilli(it.optLong("start")).atZone(Repo.zone()).toLocalTime()
+                    line("%02d:%02d   %d min   %s%s".format(t.hour, t.minute, it.optInt("mins"), it.optString("subject"), if (it.optString("kind") == "manual") "   (manual)" else ""))
+                }
+                line("Rule: 70 points x (counted minutes / goal). Manual time counts up to a quarter of the goal.", T.text3)
+                val need = (r.goal - r.studyMins).coerceAtLeast(0)
+                if (need > 0) line("$need more minutes for the full 70.", T.textAccent(p.color))
+            }
+            "backlog" -> {
+                val ks = Review.backlogKeys().toList()
+                if (ks.isEmpty()) line("Nothing pending. Full 10.", T.textAccent(T.sage))
+                ks.take(15).forEach { line("•  " + Targets.topicName(it), T.textAccent(Pyq.colorOf(it.substringBefore('|')))) }
+                line("Rule: 10, minus 2 per backlog topic and 1 per 30 pending minutes.", T.text3)
+            }
+            "dist" -> {
+                if (!Usage.granted(a)) {
+                    line("Usage access is off, so a neutral 5 is given. Turn it on in Settings > Permissions.", T.text3)
+                } else {
+                    val d0 = Usage.distraction()
+                    Usage.today(a).filter { it.key in d0 }.entries.sortedByDescending { it.value }.take(8).forEach { line(appName(a, it.key) + "   " + (it.value / 60000L) + " min") }
+                    line("Rule: first 15 minutes free, 0 points at 2 hours.", T.text3)
+                }
+            }
+            "water" -> {
+                val rows = Store.rows("water").filter { Repo.dayOf(it.optLong("t")) == Targets.today() }
+                if (rows.isEmpty()) line("No water logged today.", T.text3)
+                rows.sortedBy { it.optLong("t") }.forEach {
+                    val t = java.time.Instant.ofEpochMilli(it.optLong("t")).atZone(Repo.zone()).toLocalTime()
+                    line("%02d:%02d   %d ml".format(t.hour, t.minute, it.optInt("ml")))
+                }
+                line("Rule: 5 x (water / goal).", T.text3)
+            }
+            else -> {
+                line("Each emergency pass in strict mode costs 1 point (5 a day allowed).", T.text3)
+            }
+        }
+        Dlg.builder(a).setTitle(p.label).setView(ScrollView(a).apply { addView(box) }).setPositiveButton("Close", null).show()
+    }
+
+    /** One finished day: its saved parts and the sessions studied that day. */
+    fun dayDetail(a: Activity, d: LocalDate) {
+        val row = saved()[d.toString()]
+        val box = a.vbox()
+        box.padDp(18, 6, 18, 6)
+        if (row == null) {
+            box.addView(a.text("No saved score for this day.", 13f, 1, T.text3))
+        } else {
+            val (name, emoji, col) = grade(row.optInt("score"))
+            box.addView(a.text("$emoji  " + row.optInt("score") + " / 100   $name", 17f, 3, T.textAccent(col)))
+            val pts = row.optString("p").split(",").mapNotNull { it.toIntOrNull() }
+            val labels = listOf("Study" to 70, "Backlog" to 10, "Distraction" to 10, "Water" to 5, "Discipline" to 5)
+            labels.forEachIndexed { i, (l, mx) -> box.addView(a.text(l + "   " + (pts.getOrNull(i) ?: 0) + " / " + mx, 12.5f, 2, T.text), lp(-1, -2, 6)) }
+        }
+        box.addView(a.text("Sessions", 12f, 3, T.text), lp(-2, -2, 12))
+        val ss = sessionsOn(d)
+        if (ss.isEmpty()) box.addView(a.text("No sessions recorded.", 12f, 1, T.text3), lp(-1, -2, 4))
+        ss.sortedBy { it.optLong("start") }.forEach {
+            box.addView(a.text(it.optInt("mins").toString() + " min   " + it.optString("subject") + (if (it.optString("kind") == "manual") "   (manual)" else ""), 12.5f, 1, T.text), lp(-1, -2, 4))
+        }
+        Dlg.builder(a).setTitle(d.toString()).setView(ScrollView(a).apply { addView(box) }).setPositiveButton("Close", null).show()
+    }
+
+    /** 30 day history: bars, average, best day, number of good days; tap a day for its detail. */
+    fun historyDialog(a: Activity) {
+        val h = history(30)
+        val vals = h.mapNotNull { it.second }
+        val box = a.vbox()
+        box.padDp(18, 6, 18, 6)
+        if (vals.isEmpty()) {
+            box.addView(a.text("History starts from the first day this score was saved.", 13f, 1, T.text3))
+        } else {
+            val stats = a.hbox()
+            stats.addView(PyqUi.chip(a, "Average " + vals.average().toInt(), T.accent, true))
+            stats.addView(PyqUi.chip(a, "Best " + vals.max(), T.sage, true), lpm(-2, -2, 6, 0, 0, 0))
+            stats.addView(PyqUi.chip(a, vals.count { it >= 75 }.toString() + " great days", T.teal, true), lpm(-2, -2, 6, 0, 0, 0))
+            box.addView(stats)
+        }
+        val bars = a.hbox()
+        bars.gravity = android.view.Gravity.BOTTOM
+        h.forEach { (d, s) ->
+            val col = s?.let { grade(it).third } ?: T.text3
+            bars.addView(View(a).apply { background = T.round(T.withAlpha(col, if (s == null) 0.25f else 1f), 2); tap(false) { dayDetail(a, d) } }, LinearLayout.LayoutParams(0, T.dp(((s ?: 4) / 100f * 90).toInt().coerceAtLeast(4)), 1f).apply { marginEnd = T.dp(2) })
+        }
+        box.addView(bars, lp(-1, T.dp(96), 12))
+        box.addView(a.text("Days (tap one)", 12f, 3, T.text), lp(-2, -2, 12))
+        h.reversed().forEach { (d, s) ->
+            val col = s?.let { grade(it).third } ?: T.text3
+            val row = a.hbox()
+            row.padDp(10, 8, 10, 8)
+            row.background = T.round(T.withAlpha(col, 0.12f), 10)
+            row.addView(a.text(d.toString() + "  " + d.dayOfWeek.name.take(3).lowercase().replaceFirstChar { it.uppercase() }, 12.5f, 2, T.text), LinearLayout.LayoutParams(0, -2, 1f))
+            row.addView(a.text(if (s == null) "-" else (grade(s).second + "  " + s), 13f, 3, T.textAccent(col)))
+            row.tap(false) { dayDetail(a, d) }
+            box.addView(row, lp(-1, -2, 5))
+        }
+        Dlg.builder(a).setTitle("Score history (30 days)").setView(ScrollView(a).apply { addView(box) }).setPositiveButton("Close", null).show()
+    }
+
+    /** The big card: a 3D ring, live numbers, tappable parts and history. */
     fun card(h: Host): View {
         val c = h.act
-        val r = compute(c)
-        save(r)
-        val (name, emoji, col) = grade(r.total)
         val card = Card(c)
-        card.addView(c.cardHeader("bolt", "Today's score", col))
+        card.addView(c.cardHeader("bolt", "Today's score", T.accent))
         val top = c.hbox()
-        top.addView(c.text(r.total.toString(), 40f, 3, T.textAccent(col)))
-        top.addView(c.text(" / 100", 14f, 1, T.text3), LinearLayout.LayoutParams(-2, -2).apply { topMargin = T.dp(18) })
-        top.addView(c.flex())
-        top.addView(c.text("$emoji  $name", 14f, 3, T.textAccent(col)))
+        val ring = ScoreRing(c)
+        top.addView(ring, LinearLayout.LayoutParams(T.dp(150), T.dp(150)))
+        val side = c.vbox()
+        val gradeT = c.text("", 18f, 3, T.text)
+        val subT = c.text("", 12f, 1, T.text2)
+        val avgT = c.text("", 12f, 2, T.text2)
+        side.addView(gradeT)
+        side.addView(subT, lp(-2, -2, 4))
+        side.addView(avgT, lp(-2, -2, 4))
+        side.addView(c.pill("History", "clock", false, T.accent) { historyDialog(c) }, lp(-2, -2, 10))
+        top.addView(side, lpm(0, -2, 14, 0, 0, 0).also { (it as LinearLayout.LayoutParams).weight = 1f })
         card.addView(top, lp(-1, -2, 4))
-        r.parts.forEach { p ->
-            val row = c.hbox()
-            row.addView(c.text(p.emoji + "  " + p.label, 12f, 2, T.text), LinearLayout.LayoutParams(T.dp(110), -2))
-            val bar = LinearLayout(c)
-            val f = (p.pts.toFloat() / p.max).coerceIn(0.001f, 1f)
-            bar.addView(View(c).apply { background = T.round(p.color, 3) }, LinearLayout.LayoutParams(0, T.dp(6), f))
-            bar.addView(View(c).apply { background = T.round(T.withAlpha(p.color, 0.18f), 3) }, LinearLayout.LayoutParams(0, T.dp(6), (1f - f).coerceAtLeast(0.001f)))
-            row.addView(bar, LinearLayout.LayoutParams(0, -2, 1f))
-            row.addView(c.text(p.pts.toString() + "/" + p.max, 11.5f, 3, T.textAccent(p.color)), lpm(T.dp(44), -2, 8, 0, 0, 0))
-            card.addView(row, lp(-1, -2, 7))
-            card.addView(c.text(p.note, 10.5f, 0, T.text3), lp(-2, -2, 1))
-        }
+        val partsBox = c.vbox()
+        card.addView(partsBox, lp(-1, -2, 8))
         card.addView(c.text("Last 7 days", 11f, 2, T.text2), lp(-2, -2, 10))
         val hist = c.hbox()
-        history().forEach { (d, s) ->
-            val col2 = s?.let { grade(it).third } ?: T.text3
-            val cell = c.vbox()
-            cell.addView(c.text(s?.toString() ?: "-", 11f, 3, T.textAccent(col2)).apply { gravity = android.view.Gravity.CENTER })
-            cell.addView(View(c).apply { background = T.round(col2, 3) }, LinearLayout.LayoutParams(-1, T.dp(((s ?: 0) / 100f * 28).toInt().coerceAtLeast(3))).apply { topMargin = T.dp(3) })
-            cell.addView(c.text(d.dayOfWeek.name.take(1) + d.dayOfWeek.name.substring(1, 3).lowercase(), 9.5f, 0, T.text3).apply { gravity = android.view.Gravity.CENTER })
-            hist.addView(cell, LinearLayout.LayoutParams(0, -2, 1f))
-        }
         card.addView(hist, lp(-1, -2, 4))
+        card.addView(c.text("Updates live. Tap the ring, a line or a day for details.", 10.5f, 0, T.text3), lp(-2, -2, 8))
+
+        fun bind(r: Result) {
+            val (name, emoji, col) = grade(r.total)
+            ring.set(r.total, col, emoji)
+            gradeT.text = "$emoji  $name"
+            gradeT.setTextColor(T.textAccent(col))
+            subT.text = "${r.studyMins} of ${r.goal} min studied"
+            val vals = history(7).mapNotNull { it.second }
+            avgT.text = if (vals.isEmpty()) "7-day average: starting" else "7-day average: " + vals.average().toInt()
+            partsBox.removeAllViews()
+            r.parts.forEach { p ->
+                val row = c.hbox()
+                row.padDp(0, 5, 0, 5)
+                row.addView(c.text(p.emoji + "  " + p.label, 12f, 2, T.text), LinearLayout.LayoutParams(T.dp(112), -2))
+                val bar = LinearLayout(c)
+                val f = (p.pts.toFloat() / p.max).coerceIn(0.001f, 1f)
+                bar.addView(View(c).apply { background = T.round(p.color, 4) }, LinearLayout.LayoutParams(0, T.dp(8), f))
+                bar.addView(View(c).apply { background = T.round(T.withAlpha(p.color, 0.18f), 4) }, LinearLayout.LayoutParams(0, T.dp(8), (1f - f).coerceAtLeast(0.001f)))
+                row.addView(bar, LinearLayout.LayoutParams(0, -2, 1f))
+                row.addView(c.text(p.pts.toString() + "/" + p.max, 11.5f, 3, T.textAccent(p.color)), lpm(T.dp(46), -2, 8, 0, 0, 0))
+                row.addView(c.text(">", 12f, 2, T.text3), lpm(-2, -2, 6, 0, 0, 0))
+                row.tap(false) { partDetail(c, p, r) }
+                partsBox.addView(row)
+                partsBox.addView(c.text(p.note, 10.5f, 0, T.text3), lp(-2, -2, 0))
+            }
+            hist.removeAllViews()
+            history().forEach { (d, s) ->
+                val col2 = s?.let { grade(it).third } ?: T.text3
+                val cell = c.vbox()
+                cell.addView(c.text(s?.toString() ?: "-", 11f, 3, T.textAccent(col2)).apply { gravity = android.view.Gravity.CENTER })
+                cell.addView(View(c).apply { background = T.round(col2, 3) }, LinearLayout.LayoutParams(-1, T.dp(((s ?: 0) / 100f * 28).toInt().coerceAtLeast(3))).apply { topMargin = T.dp(3) })
+                cell.addView(c.text(d.dayOfWeek.name.take(1) + d.dayOfWeek.name.substring(1, 3).lowercase(), 9.5f, 0, T.text3).apply { gravity = android.view.Gravity.CENTER })
+                cell.tap(false) { dayDetail(c, d) }
+                hist.addView(cell, LinearLayout.LayoutParams(0, -2, 1f))
+            }
+        }
+
+        var last: Result? = null
+        fun refresh() {
+            Thread {
+                val r = try { compute(c) } catch (e: Exception) { Log.e("score", e); null }
+                if (r != null) {
+                    save(r)
+                    c.runOnUiThread { last = r; bind(r) }
+                }
+            }.start()
+        }
+        ring.tap(false) { historyDialog(c) }
+        // live: every 20 seconds while the card is on screen; stops when it is detached (no leak, no work in the background)
+        val loop =
+            object : Runnable {
+                override fun run() {
+                    refresh()
+                    card.postDelayed(this, 20000)
+                }
+            }
+        card.addOnAttachStateChangeListener(
+            object : View.OnAttachStateChangeListener {
+                override fun onViewAttachedToWindow(v: View) {
+                    card.removeCallbacks(loop)
+                    card.post(loop)
+                }
+
+                override fun onViewDetachedFromWindow(v: View) {
+                    card.removeCallbacks(loop)
+                }
+            },
+        )
+        compute(c).let { last = it; bind(it) }
         return card
+    }
+}
+
+/** A 3D looking gauge: soft drop shadow, glossy gradient arc with round caps, domed centre. Animates to the new value. */
+class ScoreRing(c: Context) : View(c) {
+    private var shown = 0f
+    private var target = 0
+    private var col = T.accent
+    private var emoji = ""
+    private var anim: android.animation.ValueAnimator? = null
+    private val shadow = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { style = android.graphics.Paint.Style.STROKE; strokeCap = android.graphics.Paint.Cap.ROUND; maskFilter = android.graphics.BlurMaskFilter(T.dpf(7f), android.graphics.BlurMaskFilter.Blur.NORMAL) }
+    private val track = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { style = android.graphics.Paint.Style.STROKE }
+    private val arc = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { style = android.graphics.Paint.Style.STROKE; strokeCap = android.graphics.Paint.Cap.ROUND }
+    private val gloss = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { style = android.graphics.Paint.Style.STROKE; strokeCap = android.graphics.Paint.Cap.ROUND }
+    private val disc = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
+    private val discShadow = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { maskFilter = android.graphics.BlurMaskFilter(T.dpf(9f), android.graphics.BlurMaskFilter.Blur.NORMAL) }
+    private val txt = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { textAlign = android.graphics.Paint.Align.CENTER; typeface = android.graphics.Typeface.create(android.graphics.Typeface.DEFAULT, android.graphics.Typeface.BOLD) }
+    private val small = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { textAlign = android.graphics.Paint.Align.CENTER }
+    private val rect = android.graphics.RectF()
+
+    init {
+        setLayerType(LAYER_TYPE_SOFTWARE, null) // needed for the blur shadows
+        contentDescription = "Daily score"
+    }
+
+    fun set(v: Int, color: Int, e: String) {
+        col = color
+        emoji = e
+        if (v == target && shown > 0f) {
+            invalidate()
+            return
+        }
+        target = v
+        anim?.cancel()
+        anim = android.animation.ValueAnimator.ofFloat(shown, v.toFloat()).apply {
+            duration = 700
+            interpolator = android.view.animation.PathInterpolator(0.22f, 0.9f, 0.25f, 1f)
+            addUpdateListener { shown = it.animatedValue as Float; invalidate() }
+            start()
+        }
+    }
+
+    override fun onDetachedFromWindow() {
+        anim?.cancel()
+        super.onDetachedFromWindow()
+    }
+
+    override fun onDraw(cv: android.graphics.Canvas) {
+        val w = width.toFloat()
+        val h = height.toFloat()
+        val cx = w / 2
+        val cy = h / 2
+        val sw = minOf(w, h) * 0.13f
+        val r = minOf(w, h) / 2 - sw * 0.9f
+        rect.set(cx - r, cy - r, cx + r, cy + r)
+        val sweep = 360f * (shown / 100f).coerceIn(0f, 1f)
+        // soft shadow under the ring
+        shadow.strokeWidth = sw
+        shadow.color = T.withAlpha(0xFF000000.toInt(), 0.30f)
+        cv.save(); cv.translate(0f, T.dpf(4f))
+        cv.drawArc(rect, -90f, maxOf(sweep, 1f), false, shadow)
+        cv.restore()
+        track.strokeWidth = sw
+        track.color = T.withAlpha(col, 0.16f)
+        cv.drawArc(rect, 0f, 360f, false, track)
+        // main arc with a lit-from-above gradient
+        val light = blend(col, 0xFFFFFFFF.toInt(), 0.35f)
+        val dark = blend(col, 0xFF000000.toInt(), 0.25f)
+        arc.strokeWidth = sw
+        arc.shader = android.graphics.SweepGradient(cx, cy, intArrayOf(dark, col, light, col), floatArrayOf(0f, 0.35f, 0.8f, 1f)).also { sh -> val m = android.graphics.Matrix(); m.postRotate(-90f, cx, cy); sh.setLocalMatrix(m) }
+        cv.drawArc(rect, -90f, maxOf(sweep, 0.5f), false, arc)
+        // glossy highlight on the upper edge of the arc
+        gloss.strokeWidth = sw * 0.28f
+        gloss.color = 0x66FFFFFF
+        val gr = android.graphics.RectF(rect); gr.inset(-sw * 0.22f, -sw * 0.22f)
+        cv.drawArc(gr, -90f, maxOf(sweep - 2f, 0.5f), false, gloss)
+        // domed centre
+        val ir = r - sw * 0.85f
+        discShadow.color = T.withAlpha(0xFF000000.toInt(), 0.22f)
+        cv.drawCircle(cx, cy + T.dpf(3f), ir, discShadow)
+        disc.shader = android.graphics.RadialGradient(cx - ir * 0.35f, cy - ir * 0.45f, ir * 1.5f, intArrayOf(blend(T.cardSolid, 0xFFFFFFFF.toInt(), 0.7f), T.cardSolid, blend(T.cardSolid, 0xFF000000.toInt(), 0.12f)), floatArrayOf(0f, 0.55f, 1f), android.graphics.Shader.TileMode.CLAMP)
+        cv.drawCircle(cx, cy, ir, disc)
+        txt.textSize = ir * 0.95f
+        txt.color = T.textAccent(col)
+        cv.drawText(Math.round(shown).toString(), cx, cy + ir * 0.18f, txt)
+        small.textSize = ir * 0.30f
+        small.color = T.text3
+        cv.drawText("of 100", cx, cy + ir * 0.55f, small)
+        small.textSize = ir * 0.40f
+        cv.drawText(emoji, cx, cy - ir * 0.52f, small)
+    }
+
+    private fun blend(a: Int, b: Int, t: Float): Int {
+        val ar = android.graphics.Color.red(a); val ag = android.graphics.Color.green(a); val ab = android.graphics.Color.blue(a)
+        return android.graphics.Color.rgb((ar + (android.graphics.Color.red(b) - ar) * t).toInt(), (ag + (android.graphics.Color.green(b) - ag) * t).toInt(), (ab + (android.graphics.Color.blue(b) - ab) * t).toInt())
     }
 }
 
