@@ -686,20 +686,28 @@ object Cards {
                 },
             ),
         )
-        if (due.isEmpty()) card.addView(c.emptyNote("Nothing due today"), lp(-2, -2, 4))
-        due.take(4).forEach {
-                r ->
+        val sorted = due.sortedByDescending { Repo.overdue(it) }
+        if (sorted.isEmpty()) card.addView(c.emptyNote("Nothing due today"), lp(-2, -2, 4))
+        sorted.take(5).forEach { r ->
+            val od = Repo.overdue(r)
+            val col = if (od > 2) T.danger else if (od > 0) T.amber else T.sage
+            val key = r.optString("key")
+            val sc = if (key.isNotBlank()) Pyq.colorOf(key.substringBefore('|')) else T.text
             card.addView(
                 c.hbox().apply {
                     padDp(0, 8, 0, 8)
-                    addView(c.text(r.optString("topic"), 14f, 1, T.text, 2), LinearLayout.LayoutParams(0, -2, 1f))
-                    addView(c.text("R${r.optInt("round") + 1}", 11f, 2, T.text3), lpm(-2, -2, 8, 0, 8, 0))
+                    addView(c.text(r.optString("topic"), 14f, 1, T.textAccent(sc), 2), LinearLayout.LayoutParams(0, -2, 1f))
+                    addView(PyqUi.chip(c, if (od == 0) "today" else "$od d late", col, true), lpm(-2, -2, 8, 0, 6, 0))
+                    addView(c.text("R${r.optInt("round") + 1}", 11f, 2, T.text3), lpm(-2, -2, 0, 0, 8, 0))
                     addView(c.pill("Done", "check", true, T.sage) { Repo.reviseDone(r.optString("id")) })
+                    if (key.isNotBlank()) tap(false) { PyqUi.detail(h.act, key) }
                 },
                 lp(-1, -2, 2),
             )
         }
-        if (due.size > 4) card.addView(c.text("+${due.size - 4} more due", 12f, 1, T.text3), lp(-2, -2, 4))
+        if (sorted.size > 5) card.addView(c.text("+${sorted.size - 5} more due", 12f, 1, T.text3), lp(-2, -2, 4))
+        val soon = Repo.revisionsSoon(7)
+        card.addView(c.text(if (soon > 0) "$soon more fall due in the next 7 days. Schedule: 1, 3, 7, 21, 60 days." else "Schedule: 1, 3, 7, 21 and 60 days after you complete a topic.", 10.5f, 0, T.text3), lp(-2, -2, 6))
         return card
     }
 

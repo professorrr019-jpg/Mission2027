@@ -797,7 +797,23 @@ object Repo {
             r < OFF.size && ld(it.optString("last"))?.plusDays(OFF[r].toLong())?.isAfter(LocalDate.now(zone())) == false
         }
 
-    fun addRevision(topic: String) = Store.add("revisions", obj("topic" to topic, "last" to LocalDate.now(zone()).toString(), "round" to 0))
+    fun addRevision(topic: String, key: String = "") = Store.add("revisions", obj("topic" to topic, "key" to key, "last" to LocalDate.now(zone()).toString(), "round" to 0))
+
+    /** Days a revision is overdue (0 = due today). */
+    fun overdue(r: JSONObject): Int {
+        val round = r.optInt("round")
+        if (round >= OFF.size) return 0
+        val due = ld(r.optString("last"))?.plusDays(OFF[round].toLong()) ?: return 0
+        return java.time.temporal.ChronoUnit.DAYS.between(due, LocalDate.now(zone())).toInt().coerceAtLeast(0)
+    }
+
+    /** Revisions that fall due in the next [days] days (not yet due today). */
+    fun revisionsSoon(days: Int = 7): Int =
+        Store.rows("revisions").count {
+            val r = it.optInt("round")
+            val due = if (r < OFF.size) ld(it.optString("last"))?.plusDays(OFF[r].toLong()) else null
+            due != null && due.isAfter(LocalDate.now(zone())) && !due.isAfter(LocalDate.now(zone()).plusDays(days.toLong()))
+        }
 
     fun reviseDone(id: String) {
         Store.update("revisions", id) {

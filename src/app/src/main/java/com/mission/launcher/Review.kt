@@ -323,7 +323,7 @@ class ReviewActivity : Activity() {
     private fun queueRevision(k: String) {
         try {
             val name = Targets.topicName(k)
-            if (Store.rows("revisions").none { it.optString("topic") == name }) Repo.addRevision(name)
+            if (Store.rows("revisions").none { it.optString("topic") == name }) Repo.addRevision(name, k)
         } catch (e: Exception) {
             Log.e("review-revision", e)
         }
