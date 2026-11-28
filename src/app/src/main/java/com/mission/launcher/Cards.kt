@@ -727,6 +727,9 @@ object Cards {
         val col = c.vbox()
         col.addView(c.statBlock("${Repo.streak()} days", "study streak", T.text))
         col.addView(c.statBlock(fmtMins(Repo.weekMinutes()), "this week", T.text), lp(-2, -2, 10))
+        // linked to the daily score: tap to open its history
+        val sc = try { DayScore.compute(c).total } catch (e: Exception) { -1 }
+        if (sc >= 0) col.addView(PyqUi.chip(c, DayScore.grade(sc).second + "  Score $sc", DayScore.grade(sc).third, true).apply { tap(false) { DayScore.historyDialog(h.act) } }, lp(-2, -2, 10))
         top.addView(col, lpm(0, -2, 18, 0, 0, 0, 1f))
         card.addView(top, lp(-1, -2, 10))
         if (Focus.active()) {
@@ -1748,6 +1751,8 @@ object Cards {
             tile("grid", "PYQ explorer", T.terra) { PyqUi.explorer(h.act) },
             tile("plus", "Add study hours", T.sage) { ManualHours.add(h.act) },
             tile("clock", "Study log", T.teal) { ManualHours.sessionLog(h.act) },
+            tile("bolt", "Score history", T.gold) { DayScore.historyDialog(h.act) },
+            tile("target", "Weak topics", T.danger) { PaceCard.makeWeakTarget(h.act) },
             tile("refresh", "Restart + clean", T.danger) { Restart.ask(h.act) },
             tile("timer", "Show timer", T.teal) { TimerState.bringBack(c) },
         ).forEach { r3b.addView(it, lpm(0, -2, 0, 0, 8, 0, 1f)) }

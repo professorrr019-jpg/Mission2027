@@ -1351,6 +1351,7 @@ class MainActivity : Activity(), Host {
                 },
                 tile("split", "Split view", T.plum) { closeRightPanel(); Split.pick(this) },
                 tile("plus", "Add study hours", T.sage) { closeRightPanel(); ManualHours.add(this) },
+                tile("bolt", "Score history", T.gold) { closeRightPanel(); DayScore.historyDialog(this) },
                 tile("layers", "Last split", T.sage) { closeRightPanel(); Split.last(this) },
                 tile("split", "Split toggle", T.slate) { closeRightPanel(); ui.postDelayed({ CircleService.global(this, android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_TOGGLE_SPLIT_SCREEN) }, 250) },
                 tile("eye", "Show timer", T.teal) { closeRightPanel(); TimerState.bringBack(this) },
