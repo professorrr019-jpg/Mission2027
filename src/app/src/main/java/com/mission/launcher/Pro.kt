@@ -44,14 +44,20 @@ object DayScore {
         if (d == Targets.today() && TimerState.active() && TimerState.running()) timerMins += ((System.currentTimeMillis() - Store.l("timer_seg", System.currentTimeMillis())) / 60000L).toInt().coerceAtLeast(0)
         val counted = timerMins + minOf(manual, goal / 4)
         val study = Math.round(70f * (counted.toFloat() / goal).coerceIn(0f, 1f))
-        val bk = Review.backlogKeys().size
-        val bkMin = Review.backlogMins()
+        val isToday = d == Targets.today()
+        val endMs = Repo.startOf(d.plusDays(1))
+        // past days: a backlog row counts if it existed that day and was still open at its end
+        fun openThen(r: org.json.JSONObject): Boolean = isToday && !r.optBoolean("done") || !isToday && r.optString("date").let { it.isBlank() || it <= d.toString() } && (!r.optBoolean("done") || r.optLong("updatedAt") > endMs)
+        val bRows = Store.rows(Review.BACKLOG).filter { openThen(it) }
+        val bk = bRows.filter { it.optString("type") == "topic" }.map { it.optString("key") }.toSet().size
+        val bkMin = bRows.filter { it.optString("type") == "time" }.sumOf { it.optInt("mins") }
         val back = (10 - bk * 2 - bkMin / 30).coerceIn(0, 10)
         var dis = 5
         var disNote = "Usage access off: neutral 5"
-        if (Usage.granted(c)) {
+        val use = if (Usage.granted(c)) Usage.on(c, d) else emptyMap()
+        if (Usage.granted(c) && (isToday || use.isNotEmpty())) {
             val d0 = Usage.distraction()
-            val ms = Usage.today(c).filter { it.key in d0 }.values.sum()
+            val ms = use.filter { it.key in d0 }.values.sum()
             val m = (ms / 60000L).toInt()
             dis = (10 - Math.round(10f * ((m - 15f) / 105f).coerceIn(0f, 1f)))
             disNote = "$m min on distraction apps"
@@ -75,13 +81,31 @@ object DayScore {
     // ---- tamper-proof history: only today can be written, every row carries a signature ----
     private fun sig(day: String, score: Int, p: String): String = Integer.toHexString((day + "|" + score + "|" + p + "|mission-2027").hashCode())
 
-    fun save(r: Result) {
+    /** Past days that were never saved (app not opened, update installed later) are rebuilt once from sessions, water, usage and reviews. */
+    fun backfill(c: Context) {
         try {
-            val day = Targets.today().toString()
+            val todayS = Targets.today().toString()
+            if (Store.s("score_backfill") == todayS) return
+            Store.put("score_backfill", todayS)
+            val have = saved().keys
+            val first = Store.rows("sessions").minOfOrNull { it.optLong("start") }?.let { java.time.Instant.ofEpochMilli(it).atZone(Repo.zone()).toLocalDate() } ?: return
+            for (i in 1..30) {
+                val d = Targets.today().minusDays(i.toLong())
+                if (d < first || d.toString() in have) continue
+                save(compute(c, d), d, true)
+            }
+        } catch (e: Exception) {
+            Log.e("score-backfill", e)
+        }
+    }
+
+    fun save(r: Result, d: LocalDate = Targets.today(), rebuilt: Boolean = false) {
+        try {
+            val day = d.toString()
             val p = r.parts.joinToString(",") { it.pts.toString() }
             val ex = Store.rows("score_hist").firstOrNull { it.optString("day") == day }
             if (ex == null) {
-                Store.add("score_hist", obj("day" to day, "score" to r.total, "p" to p, "m" to r.studyMins, "sig" to sig(day, r.total, p)))
+                Store.add("score_hist", obj("day" to day, "score" to r.total, "p" to p, "m" to r.studyMins, "sig" to sig(day, r.total, p), "r" to (if (rebuilt) 1 else 0)))
             } else if (ex.optInt("score") != r.total || ex.optString("p") != p) {
                 Store.update("score_hist", ex.optString("id")) { it.put("score", r.total).put("p", p).put("m", r.studyMins).put("sig", sig(day, r.total, p)) }
             }
@@ -162,6 +186,7 @@ object DayScore {
         } else {
             val (name, emoji, col) = grade(row.optInt("score"))
             box.addView(a.text("$emoji  " + row.optInt("score") + " / 100   $name", 17f, 3, T.textAccent(col)))
+            if (row.optInt("r") == 1) box.addView(a.text("Rebuilt from your sessions, water, app usage and reviews of that day.", 11f, 1, T.text3), lp(-1, -2, 2))
             val pts = row.optString("p").split(",").mapNotNull { it.toIntOrNull() }
             val labels = listOf("Study" to 70, "Backlog" to 10, "Distraction" to 10, "Water" to 5, "Discipline" to 5)
             labels.forEachIndexed { i, (l, mx) -> box.addView(a.text(l + "   " + (pts.getOrNull(i) ?: 0) + " / " + mx, 12.5f, 2, T.text), lp(-1, -2, 6)) }
@@ -278,6 +303,7 @@ object DayScore {
                 val r = try { compute(c) } catch (e: Exception) { Log.e("score", e); null }
                 if (r != null) {
                     save(r)
+                    backfill(c)
                     c.runOnUiThread { last = r; bind(r) }
                 }
             }.start()

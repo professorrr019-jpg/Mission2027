@@ -265,11 +265,15 @@ object Usage {
     }
 
     /** Real foreground time per app since local midnight: RESUMED..PAUSED pairs, never the overlapping daily/weekly buckets. */
-    fun today(c: Context): Map<String, Long> {
+    fun today(c: Context): Map<String, Long> = on(c, LocalDate.now(Repo.zone()))
+
+    /** Same for any day still kept by Android (about the last 7 to 10 days). */
+    fun on(c: Context, day: LocalDate): Map<String, Long> {
         return try {
             val um = c.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
-            val now = System.currentTimeMillis()
-            val start = Repo.startOf(LocalDate.now(Repo.zone()))
+            val isToday = day == LocalDate.now(Repo.zone())
+            val now = if (isToday) System.currentTimeMillis() else Repo.startOf(day.plusDays(1))
+            val start = Repo.startOf(day)
             val ev = um.queryEvents(start, now)
             val e = android.app.usage.UsageEvents.Event()
             val open = HashMap<String, Long>()
