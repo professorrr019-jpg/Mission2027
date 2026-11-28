@@ -268,7 +268,21 @@ object Usage {
     fun today(c: Context): Map<String, Long> = on(c, LocalDate.now(Repo.zone()))
 
     /** Same for any day still kept by Android (about the last 7 to 10 days). */
+    private val cache = HashMap<LocalDate, Pair<Long, Map<String, Long>>>()
+
+    /** Cached: today for 20 s, past days for an hour. Keeps card redraws from re-reading the whole event log. */
+    @Synchronized
     fun on(c: Context, day: LocalDate): Map<String, Long> {
+        val now = System.currentTimeMillis()
+        val ttl = if (day == LocalDate.now(Repo.zone())) 20_000L else 3_600_000L
+        cache[day]?.let { if (now - it.first < ttl) return it.second }
+        val r = read(c, day)
+        if (cache.size > 12) cache.clear()
+        cache[day] = now to r
+        return r
+    }
+
+    private fun read(c: Context, day: LocalDate): Map<String, Long> {
         return try {
             val um = c.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
             val isToday = day == LocalDate.now(Repo.zone())
