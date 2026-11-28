@@ -230,7 +230,7 @@ object Briefs {
                                 it.optString("text")
                             }
                     }
-                ) + (if (rev > 0) "\n$rev topics to revise." else "") + "\nWater goal ${Water.goal()} ml. Study streak ${Repo.streak()} days.",
+                ) + (if (rev > 0) "\n$rev topics to revise." else "") + DayScore.briefing(c).let { if (it.isBlank()) "" else "\n$it" } + "\nWater goal ${Water.goal()} ml. Study streak ${Repo.streak()} days.",
                 "morning",
             )
         }

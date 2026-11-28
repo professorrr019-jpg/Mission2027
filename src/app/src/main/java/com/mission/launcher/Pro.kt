@@ -115,6 +115,22 @@ object DayScore {
     }
 
     /** Saved, untouched rows only. A row whose signature does not match was edited and is ignored. */
+    /** Next-day briefing from yesterday's score: grade, trend and the weakest part to fix today. */
+    fun briefing(c: Context): String =
+        try {
+            val y = Targets.today().minusDays(1)
+            val r = compute(c, y)
+            val g = grade(r.total)
+            val prev = saved()[y.minusDays(1).toString()]?.optInt("score")
+            val trend = if (prev == null) "" else if (r.total >= prev) " (up ${r.total - prev})" else " (down ${prev - r.total})"
+            val weak = r.parts.filter { it.max > 0 }.minByOrNull { it.pts.toFloat() / it.max }
+            val first = "Yesterday ${r.total}/100 ${g.second} ${g.first}$trend."
+            val fix = if (weak != null && weak.pts < weak.max) " Fix today: ${weak.emoji} ${weak.label} (${weak.pts}/${weak.max})." else " Keep the same routine."
+            first + fix + (if (r.total < 60) " Start with your first target within 30 minutes." else "")
+        } catch (e: Exception) {
+            ""
+        }
+
     fun saved(): Map<String, org.json.JSONObject> =
         Store.rows("score_hist").filter { it.optString("sig") == sig(it.optString("day"), it.optInt("score"), it.optString("p")) }.associateBy { it.optString("day") }
 
@@ -585,18 +601,32 @@ object ManualHours {
             Pyq.load(a)
             val subs = Pyq.subjects.map { it.name } + "General / other"
             Dlg.choose(a, "Subject", subs.map { if (it == "General / other") it else Syl.short(it) }) { si ->
-                Dlg.input(a, "Study time", "Minutes (90) or hours (1.5h)", "", false, false, "Add") { v ->
-                    val t = v.trim().lowercase()
-                    val mins = try { if (t.endsWith("h")) (t.dropLast(1).trim().toDouble() * 60).toInt() else t.toDouble().toInt() } catch (e: Exception) { 0 }
-                    if (mins !in 1..900) {
-                        a.toast("Enter a time between 1 minute and 15 hours")
-                    } else {
-                        val start = days[di].atTime(18, 0).atZone(Repo.zone()).toInstant().toEpochMilli()
-                        val subject = if (si < Pyq.subjects.size) Syl.short(subs[si]) else "General"
-                        Repo.addSession(start, start + mins * 60000L, subject, "manual")
-                        Store.changed()
-                        a.toast("Added $mins min of $subject on ${days[di]}")
+                val isGeneral = si >= Pyq.subjects.size
+                val subject = if (isGeneral) "General" else Syl.short(subs[si])
+                fun askTime(topics: List<String>) {
+                    Dlg.input(a, "Study time" + (if (topics.isNotEmpty()) " (split across ${topics.size} topics)" else ""), "Minutes (90) or hours (1.5h)", "", false, false, "Add") { v ->
+                        val t = v.trim().lowercase()
+                        val mins = try { if (t.endsWith("h")) (t.dropLast(1).trim().toDouble() * 60).toInt() else t.toDouble().toInt() } catch (e: Exception) { 0 }
+                        if (mins !in 1..900) {
+                            a.toast("Enter a time between 1 minute and 15 hours")
+                        } else {
+                            val base = days[di].atTime(18, 0).atZone(Repo.zone()).toInstant().toEpochMilli()
+                            val names = if (topics.isEmpty()) listOf("") else topics.map { Targets.topicName(it) }
+                            val each = (mins / names.size).coerceAtLeast(1)
+                            names.forEachIndexed { i, n ->
+                                val start = base + i * 1000L
+                                Store.add("sessions", obj("id" to java.util.UUID.randomUUID().toString(), "updatedAt" to System.currentTimeMillis(), "synced" to false, "start" to start, "end" to start + each * 60000L, "mins" to each, "subject" to subject, "topic" to n, "kind" to "manual"))
+                            }
+                            Store.changed()
+                            a.toast("Added ${each * names.size} min: $subject" + (if (topics.isNotEmpty()) " (${topics.size} topics)" else "") + " on ${days[di]}")
+                        }
                     }
+                }
+                if (isGeneral) {
+                    askTime(emptyList())
+                } else {
+                    val keys = Pyq.withPractice.firstOrNull { it.name == subs[si] }?.micros?.map { it.key } ?: emptyList()
+                    if (keys.isEmpty()) askTime(emptyList()) else PyqUi.pick(a, "$subject: which topics did you study?", keys, emptyList(), false, "Next") { sel -> askTime(sel) }
                 }
             }
         }
