@@ -319,6 +319,16 @@ class ReviewActivity : Activity() {
         setContentView(ScrollView(this).apply { addView(box); isFillViewport = true })
     }
 
+    /** A completed or "revise" topic is added to the Revise today card, so reviews and revision are one chain. */
+    private fun queueRevision(k: String) {
+        try {
+            val name = Targets.topicName(k)
+            if (Store.rows("revisions").none { it.optString("topic") == name }) Repo.addRevision(name)
+        } catch (e: Exception) {
+            Log.e("review-revision", e)
+        }
+    }
+
     private fun save(keys: List<String>, details: String, summary: String, reason: String, tid: String, short: Int) {
         try {
             val now = System.currentTimeMillis()
@@ -330,8 +340,12 @@ class ReviewActivity : Activity() {
                     when (s) {
                         "done" -> {
                             if (k !in Syl.doneSet()) Syl.toggle(k)
+                            queueRevision(k)
                             Store.rows(Review.BACKLOG).filter { it.optString("key") == k && !it.optBoolean("done") }.forEach { r -> Store.update(Review.BACKLOG, r.optString("id")) { it.put("done", true) } }
                         }
+                        "backlog", "revise" -> if (s == "revise") queueRevision(k)
+                    }
+                    when (s) {
                         "backlog", "revise" -> if (Store.rows(Review.BACKLOG).none { it.optString("key") == k && !it.optBoolean("done") }) {
                             Store.add(Review.BACKLOG, obj("type" to "topic", "key" to k, "date" to date.toString(), "why" to s, "updatedAt" to now))
                         }
